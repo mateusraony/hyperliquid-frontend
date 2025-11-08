@@ -2,6 +2,7 @@ import { CONFIG, ENDPOINTS } from './config';
 
 /**
  * Service Layer - Centraliza todas as chamadas HTTP
+ * ATUALIZADO com timeout maior e função de deletar
  */
 class ApiService {
   constructor() {
@@ -33,7 +34,7 @@ class ApiService {
       clearTimeout(timeoutId);
       
       if (error.name === 'AbortError') {
-        throw new Error('Request timeout - API demorou muito para responder');
+        throw new Error('Backend está demorando muito (API Hyperliquid pode estar lenta). Tente novamente em 30s.');
       }
       
       throw error;
@@ -47,7 +48,7 @@ class ApiService {
     try {
       return await this.fetchWithTimeout(url, options);
     } catch (error) {
-      if (retries > 0) {
+      if (retries > 0 && !error.message.includes('404')) {
         console.warn(`Tentando novamente... (${CONFIG.MAX_RETRIES - retries + 1}/${CONFIG.MAX_RETRIES})`);
         await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY));
         return this.fetchWithRetry(url, options, retries - 1);
@@ -111,6 +112,16 @@ class ApiService {
     const url = `${this.baseUrl}${ENDPOINTS.ADD_WHALE}?address=${address}&nickname=${nickname}`;
     return await this.fetchWithRetry(url, {
       method: 'POST',
+    });
+  }
+
+  /**
+   * NOVO! Remove uma whale do monitoramento
+   */
+  async deleteWhale(address) {
+    const url = `${this.baseUrl}${ENDPOINTS.DELETE_WHALE(address)}`;
+    return await this.fetchWithRetry(url, {
+      method: 'DELETE',
     });
   }
 }
