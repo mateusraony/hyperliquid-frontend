@@ -1,133 +1,316 @@
-import { CONFIG, ENDPOINTS } from './config';
+// ============================================
+// SERVIÇO DE COMUNICAÇÃO COM A API
+// ============================================
 
-/**
- * Service Layer - Centraliza todas as chamadas HTTP
- * ATUALIZADO com timeout maior e função de deletar
- */
-class ApiService {
-  constructor() {
-    this.baseUrl = CONFIG.API_BASE_URL;
-    this.timeout = CONFIG.REQUEST_TIMEOUT;
-  }
+import { CONFIG, ENDPOINTS, ERROR_MESSAGES } from './config.js';
 
-  /**
-   * Função auxiliar para fazer requests com timeout e retry
-   */
-  async fetchWithTimeout(url, options = {}) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+// ============================================
+// FUNÇÃO AUXILIAR: SLEEP
+// ============================================
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-      });
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-      clearTimeout(timeoutId);
+// ============================================
+// FUNÇÃO PRINCIPAL: FAZER REQUISIÇÃO HTTP
+// ============================================
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+async function fetchWithRetry(url, options = {}, retries = CONFIG.MAX_RETRIES) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeout || CONFIG.REQUEST_TIMEOUT);
 
-      return await response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      
-      if (error.name === 'AbortError') {
-        throw new Error('Backend está demorando muito (API Hyperliquid pode estar lenta). Tente novamente em 30s.');
-      }
-      
-      throw error;
-    }
-  }
-
-  /**
-   * Função com retry automático
-   */
-  async fetchWithRetry(url, options = {}, retries = CONFIG.MAX_RETRIES) {
-    try {
-      return await this.fetchWithTimeout(url, options);
-    } catch (error) {
-      if (retries > 0 && !error.message.includes('404')) {
-        console.warn(`Tentando novamente... (${CONFIG.MAX_RETRIES - retries + 1}/${CONFIG.MAX_RETRIES})`);
-        await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY));
-        return this.fetchWithRetry(url, options, retries - 1);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Health Check - Verifica se a API está funcionando
-   */
-  async checkHealth() {
-    const url = `${this.baseUrl}${ENDPOINTS.HEALTH}`;
-    return await this.fetchWithTimeout(url);
-  }
-
-  /**
-   * Busca todas as whales monitoradas
-   */
-  async getWhales() {
-    const url = `${this.baseUrl}${ENDPOINTS.WHALES}`;
-    return await this.fetchWithRetry(url);
-  }
-
-  /**
-   * Busca detalhes de uma whale específica
-   */
-  async getWhaleDetails(address) {
-    const url = `${this.baseUrl}${ENDPOINTS.WHALE_DETAILS(address)}`;
-    return await this.fetchWithRetry(url);
-  }
-
-  /**
-   * Busca posições abertas de uma whale
-   */
-  async getPositions(address) {
-    const url = `${this.baseUrl}${ENDPOINTS.POSITIONS(address)}`;
-    return await this.fetchWithRetry(url);
-  }
-
-  /**
-   * Busca histórico de trades de uma whale
-   */
-  async getTrades(address, limit = 50) {
-    const url = `${this.baseUrl}${ENDPOINTS.TRADES(address)}?limit=${limit}`;
-    return await this.fetchWithRetry(url);
-  }
-
-  /**
-   * Busca estatísticas globais
-   */
-  async getStats() {
-    const url = `${this.baseUrl}${ENDPOINTS.STATS}`;
-    return await this.fetchWithRetry(url);
-  }
-
-  /**
-   * Adiciona uma nova whale para monitoramento
-   */
-  async addWhale(address, nickname) {
-    const url = `${this.baseUrl}${ENDPOINTS.ADD_WHALE}?address=${address}&nickname=${nickname}`;
-    return await this.fetchWithRetry(url, {
-      method: 'POST',
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
     });
-  }
 
-  /**
-   * NOVO! Remove uma whale do monitoramento
-   */
-  async deleteWhale(address) {
-    const url = `${this.baseUrl}${ENDPOINTS.DELETE_WHALE(address)}`;
-    return await this.fetchWithRetry(url, {
-      method: 'DELETE',
-    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+
+  } catch (error) {
+    clearTimeout(timeout);
+
+    // Se foi timeout
+    if (error.name === 'AbortError') {
+      if (retries > 0) {
+        console.log(`⏳ Timeout! Tentando novamente... (${retries} tentativas restantes)`);
+        await sleep(CONFIG.RETRY_DELAY);
+        return fetchWithRetry(url, options, retries - 1);
+      }
+      throw new Error(ERROR_MESSAGES.TIMEOUT);
+    }
+
+    // Se foi erro de rede
+    if (error.message.includes('Failed to fetch')) {
+      if (retries > 0) {
+        console.log(`🔄 Erro de rede! Tentando novamente... (${retries} tentativas restantes)`);
+        await sleep(CONFIG.RETRY_DELAY);
+        return fetchWithRetry(url, options, retries - 1);
+      }
+      throw new Error(ERROR_MESSAGES.NETWORK);
+    }
+
+    // Outros erros
+    if (retries > 0) {
+      console.log(`❌ Erro! Tentando novamente... (${retries} tentativas restantes)`);
+      await sleep(CONFIG.RETRY_DELAY);
+      return fetchWithRetry(url, options, retries - 1);
+    }
+
+    throw error;
   }
 }
 
-// Exporta instância única (Singleton)
-export const apiService = new ApiService();
+// ============================================
+// API SERVICE - FUNÇÕES PÚBLICAS
+// ============================================
 
-// Exporta também a classe para testes
-export default ApiService;
+export const apiService = {
+  
+  // --------------------------------------------
+  // HEALTH CHECK
+  // --------------------------------------------
+  
+  async healthCheck() {
+    try {
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.HEALTH}`;
+      const data = await fetchWithRetry(url, {
+        method: 'GET',
+        timeout: CONFIG.HEALTH_CHECK_TIMEOUT,
+      }, 1); // Só 1 tentativa para health check
+      
+      return {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      console.error('❌ Health check falhou:', error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  // --------------------------------------------
+  // BUSCAR TODAS AS WHALES
+  // --------------------------------------------
+  
+  async getWhales() {
+    try {
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.WHALES}`;
+      const data = await fetchWithRetry(url, {
+        method: 'GET',
+      });
+      
+      return {
+        success: true,
+        data: data.whales || [],
+        total: data.total || 0,
+        lastUpdate: data.last_update,
+      };
+    } catch (error) {
+      console.error('❌ Erro ao buscar whales:', error.message);
+      return {
+        success: false,
+        error: error.message,
+        data: [],
+      };
+    }
+  },
+
+  // --------------------------------------------
+  // BUSCAR DETALHES DE UMA WHALE
+  // --------------------------------------------
+  
+  async getWhaleDetails(address) {
+    try {
+      if (!address) throw new Error('Endereço não fornecido');
+      
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.WHALE_DETAILS(address)}`;
+      const data = await fetchWithRetry(url, {
+        method: 'GET',
+      });
+      
+      return {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      console.error(`❌ Erro ao buscar detalhes de ${address}:`, error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  // --------------------------------------------
+  // BUSCAR POSIÇÕES DE UMA WHALE
+  // --------------------------------------------
+  
+  async getPositions(address) {
+    try {
+      if (!address) throw new Error('Endereço não fornecido');
+      
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.POSITIONS(address)}`;
+      const data = await fetchWithRetry(url, {
+        method: 'GET',
+      });
+      
+      return {
+        success: true,
+        data: data.positions || [],
+      };
+    } catch (error) {
+      console.error(`❌ Erro ao buscar posições de ${address}:`, error.message);
+      return {
+        success: false,
+        error: error.message,
+        data: [],
+      };
+    }
+  },
+
+  // --------------------------------------------
+  // BUSCAR TRADES DE UMA WHALE
+  // --------------------------------------------
+  
+  async getTrades(address) {
+    try {
+      if (!address) throw new Error('Endereço não fornecido');
+      
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.TRADES(address)}`;
+      const data = await fetchWithRetry(url, {
+        method: 'GET',
+      });
+      
+      return {
+        success: true,
+        data: data.trades || [],
+      };
+    } catch (error) {
+      console.error(`❌ Erro ao buscar trades de ${address}:`, error.message);
+      return {
+        success: false,
+        error: error.message,
+        data: [],
+      };
+    }
+  },
+
+  // --------------------------------------------
+  // BUSCAR ESTATÍSTICAS GLOBAIS
+  // --------------------------------------------
+  
+  async getStats() {
+    try {
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.STATS}`;
+      const data = await fetchWithRetry(url, {
+        method: 'GET',
+      });
+      
+      return {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      console.error('❌ Erro ao buscar estatísticas:', error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  // --------------------------------------------
+  // ✅ ADICIONAR NOVA WHALE
+  // --------------------------------------------
+  
+  async addWhale(address) {
+    try {
+      if (!address) throw new Error('Endereço não fornecido');
+      
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.ADD_WHALE}?address=${address}`;
+      const data = await fetchWithRetry(url, {
+        method: 'POST',
+      });
+      
+      return {
+        success: true,
+        data,
+        message: 'Whale adicionada com sucesso!',
+      };
+    } catch (error) {
+      console.error('❌ Erro ao adicionar whale:', error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  // --------------------------------------------
+  // ✅ DELETAR WHALE
+  // --------------------------------------------
+  
+  async deleteWhale(address) {
+    try {
+      if (!address) throw new Error('Endereço não fornecido');
+      
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.DELETE_WHALE(address)}`;
+      const data = await fetchWithRetry(url, {
+        method: 'DELETE',
+      });
+      
+      return {
+        success: true,
+        data,
+        message: 'Whale removida com sucesso!',
+      };
+    } catch (error) {
+      console.error('❌ Erro ao deletar whale:', error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  // --------------------------------------------
+  // FORÇAR ATUALIZAÇÃO DOS DADOS
+  // --------------------------------------------
+  
+  async forceRefresh() {
+    try {
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.REFRESH}`;
+      const data = await fetchWithRetry(url, {
+        method: 'POST',
+      });
+      
+      return {
+        success: true,
+        data,
+        message: 'Dados atualizados!',
+      };
+    } catch (error) {
+      console.error('❌ Erro ao forçar atualização:', error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+};
+
+export default apiService;
