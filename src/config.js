@@ -1,4 +1,4 @@
-// Configurações Globais do Sistema
+// Configurações Globais do Sistema - ATUALIZADO
 export const CONFIG = {
   // URL da sua API no Render.com
   API_BASE_URL: 'https://hyperliquid-whale-backend.onrender.com',
@@ -6,14 +6,14 @@ export const CONFIG = {
   // Tempo de atualização automática (em milissegundos)
   REFRESH_INTERVAL: 30000, // 30 segundos
   
-  // Timeout para requisições HTTP
-  REQUEST_TIMEOUT: 10000, // 10 segundos
+  // Timeout para requisições HTTP - AUMENTADO!
+  REQUEST_TIMEOUT: 60000, // 60 segundos (era 10s)
   
   // Número de tentativas em caso de erro
   MAX_RETRIES: 3,
   
   // Delay entre tentativas (em milissegundos)
-  RETRY_DELAY: 2000, // 2 segundos
+  RETRY_DELAY: 5000, // 5 segundos (era 2s)
 };
 
 // URLs dos endpoints
@@ -25,6 +25,7 @@ export const ENDPOINTS = {
   TRADES: (address) => `/api/trades/${address}`,
   STATS: '/api/stats',
   ADD_WHALE: '/api/whale/add',
+  DELETE_WHALE: (address) => `/api/whale/delete/${address}`, // NOVO!
 };
 
 // Status da wallet
