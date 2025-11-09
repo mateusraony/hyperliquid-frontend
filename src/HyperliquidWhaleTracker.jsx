@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Award, BarChart3, ExternalLink, Clock, Zap, Users, Shield, AlertTriangle, PlayCircle, Layers, ChevronDown, ChevronUp, Trash2, X } from 'lucide-react';
+import { TrendingUp, Bell, Activity, Target, Brain, Award, BarChart3, ExternalLink, Clock, Zap, Users, Shield, AlertTriangle, PlayCircle, Layers, ChevronDown, ChevronUp, Trash2, X, RefreshCw } from 'lucide-react';
 
 export default function HyperliquidWhaleTracker() {
-  // Estados
   const [tab, setTab] = useState('command');
   const [whalesData, setWhalesData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,12 +11,11 @@ export default function HyperliquidWhaleTracker() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [whaleToDelete, setWhaleToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
-  // Configuração da API
   const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
-  const TIMEOUT = 60000; // 60 segundos
+  const TIMEOUT = 60000;
 
-  // Dados mockados para liquidação
   const liquidationData = {
     '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
     '7D': { total: 8920000, trades: 67, profit: 1890000, longs: 42, shorts: 25 },
@@ -25,7 +23,6 @@ export default function HyperliquidWhaleTracker() {
     '1M': { total: 24500000, trades: 234, profit: 4870000, longs: 145, shorts: 89 },
   };
 
-  // Carregar dados da API
   useEffect(() => {
     loadWhalesData();
     const interval = setInterval(loadWhalesData, 30000);
@@ -34,46 +31,51 @@ export default function HyperliquidWhaleTracker() {
 
   async function loadWhalesData() {
     try {
-      console.log('🔄 Carregando dados...');
+      console.log('🔄 Carregando dados da API...');
+      setError(null);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
 
       const response = await fetch(`${API_URL}/api/whales`, {
-        signal: controller.signal
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' }
       });
 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log('✅ Dados carregados:', data);
+      console.log('✅ Dados recebidos:', data);
+      console.log('📊 Primeira whale:', data.whales?.[0]);
 
       if (data.whales && Array.isArray(data.whales)) {
         setWhalesData(data.whales);
+        setLastUpdate(data.last_update || new Date().toISOString());
         setSystemStatus('online');
-        setError(null);
+        console.log(`✅ ${data.whales.length} whales carregadas`);
       } else {
-        throw new Error('Formato de dados inválido');
+        console.error('❌ Formato inválido:', data);
+        throw new Error('Dados inválidos da API');
       }
 
       setLoading(false);
 
     } catch (err) {
-      console.error('❌ Erro:', err);
-      setError(err.message);
+      console.error('❌ Erro ao carregar:', err);
+      setError(err.name === 'AbortError' ? 'Timeout - API demorou muito' : err.message);
       setSystemStatus('offline');
       setLoading(false);
     }
   }
 
-  // Função de deletar
   async function deleteWhale(address) {
     try {
       setDeleteLoading(true);
+      console.log('🗑️ Deletando:', address);
       
       const response = await fetch(`${API_URL}/api/whale/delete/${address}`, {
         method: 'DELETE'
@@ -81,20 +83,21 @@ export default function HyperliquidWhaleTracker() {
 
       if (!response.ok) throw new Error('Erro ao deletar');
 
+      console.log('✅ Whale deletada');
       setWhalesData(prev => prev.filter(w => w.address !== address));
       setShowDeleteModal(false);
       setWhaleToDelete(null);
 
     } catch (err) {
-      alert('Erro ao deletar whale: ' + err.message);
+      console.error('❌ Erro ao deletar:', err);
+      alert('Erro: ' + err.message);
     } finally {
       setDeleteLoading(false);
     }
   }
 
-  // Funções auxiliares
   function formatCurrency(value) {
-    if (!value) return '$0';
+    if (!value || value === 0) return '$0.00';
     if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`;
     if (value >= 1000) return `$${(value / 1000).toFixed(2)}K`;
     return `$${value.toFixed(2)}`;
@@ -105,31 +108,24 @@ export default function HyperliquidWhaleTracker() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   }
 
-  function getStatusEmoji() {
-    if (systemStatus === 'online') return '🟢';
-    if (systemStatus === 'warning') return '🟡';
-    return '🔴';
-  }
+  // Calcula totais
+  const totalValue = whalesData.reduce((sum, w) => sum + (parseFloat(w.total_value) || 0), 0);
+  const totalPositions = whalesData.reduce((sum, w) => sum + (parseInt(w.positions_count) || 0), 0);
+  const totalPnl = whalesData.reduce((sum, w) => sum + (parseFloat(w.pnl_24h) || 0), 0);
 
-  // Calcula métricas
-  const totalValue = whalesData.reduce((sum, w) => sum + (w.total_value || 0), 0);
-  const totalPositions = whalesData.reduce((sum, w) => sum + (w.positions_count || 0), 0);
-  const totalPnl = whalesData.reduce((sum, w) => sum + (w.pnl_24h || 0), 0);
-
-  // Loading
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-lg">Carregando dados das whales...</p>
-          <p className="text-sm text-slate-500 mt-2">Aguarde até 60 segundos</p>
+          <p className="text-lg">Carregando dados das 11 whales...</p>
+          <p className="text-sm text-slate-500 mt-2">Primeira carga pode demorar até 60 segundos</p>
+          <p className="text-xs text-slate-600 mt-2">Processando dados da Hyperliquid API...</p>
         </div>
       </div>
     );
   }
 
-  // Error
   if (error && whalesData.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white flex items-center justify-center p-6">
@@ -137,10 +133,12 @@ export default function HyperliquidWhaleTracker() {
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2">Erro ao Carregar</h2>
           <p className="text-slate-400 mb-4">{error}</p>
+          <p className="text-xs text-slate-500 mb-4">API: {API_URL}</p>
           <button 
             onClick={loadWhalesData}
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-semibold"
+            className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-semibold flex items-center gap-2 mx-auto"
           >
+            <RefreshCw className="w-4 h-4" />
             Tentar Novamente
           </button>
         </div>
@@ -148,11 +146,9 @@ export default function HyperliquidWhaleTracker() {
     );
   }
 
-  // Render principal
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
       
-      {/* Scrollbar */}
       <style>{`
         ::-webkit-scrollbar { width: 12px; }
         ::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }
@@ -171,7 +167,6 @@ export default function HyperliquidWhaleTracker() {
         <div className="max-w-[1900px] mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-3">
             
-            {/* Logo */}
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                 <Activity className="w-5 h-5" />
@@ -182,20 +177,32 @@ export default function HyperliquidWhaleTracker() {
               </div>
             </div>
             
-            {/* Status e Botões */}
             <div className="flex items-center gap-2">
               <a href="https://hypurrscan.io" target="_blank" rel="noopener noreferrer" 
                 className="flex items-center gap-1 px-2 py-1 bg-slate-800 rounded text-xs hover:bg-slate-700">
                 <ExternalLink className="w-3 h-3" />Hypurrscan
               </a>
               
-              {/* Status */}
-              <div className={`flex items-center gap-2 bg-${systemStatus === 'online' ? 'green' : 'red'}-500/10 border border-${systemStatus === 'online' ? 'green' : 'red'}-500/30 px-3 py-1 rounded text-xs`}>
-                <div className={`w-2 h-2 bg-${systemStatus === 'online' ? 'green' : 'red'}-400 rounded-full animate-pulse`}></div>
-                <span className="font-medium flex items-center gap-1">
-                  {getStatusEmoji()} Live • {whalesData.length}
+              <div className={`flex items-center gap-2 px-3 py-1 rounded text-xs ${
+                systemStatus === 'online' 
+                  ? 'bg-green-500/10 border border-green-500/30' 
+                  : 'bg-red-500/10 border border-red-500/30'
+              }`}>
+                <div className={`w-2 h-2 rounded-full animate-pulse ${
+                  systemStatus === 'online' ? 'bg-green-400' : 'bg-red-400'
+                }`}></div>
+                <span className="font-medium">
+                  {systemStatus === 'online' ? '🟢' : '🔴'} Live • {whalesData.length}
                 </span>
               </div>
+
+              <button 
+                onClick={loadWhalesData}
+                className="p-1.5 hover:bg-slate-800 rounded"
+                title="Atualizar dados"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
 
               <button className="p-1.5 hover:bg-slate-800 rounded">
                 <Bell className="w-4 h-4" />
@@ -244,8 +251,8 @@ export default function HyperliquidWhaleTracker() {
             {/* Métricas Globais */}
             <div className="grid grid-cols-8 gap-3">
               {[
-                { label: 'Total PnL', val: formatCurrency(totalPnl), sub: '+34.7%', color: 'green' },
-                { label: 'Open Pos', val: totalPositions, sub: formatCurrency(totalValue), color: 'blue' },
+                { label: 'Total PnL', val: formatCurrency(totalPnl), sub: totalPnl >= 0 ? '+34.7%' : '-5.2%', color: 'green' },
+                { label: 'Open Pos', val: totalPositions.toString(), sub: formatCurrency(totalValue), color: 'blue' },
                 { label: 'Win Rate', val: '79.3%', sub: '+2.1%', color: 'purple' },
                 { label: 'Sharpe', val: '2.84', sub: 'Excellent', color: 'yellow' },
                 { label: 'Heat', val: '45%', sub: 'MEDIUM', color: 'orange' },
@@ -314,15 +321,15 @@ export default function HyperliquidWhaleTracker() {
                       {isExpanded && (
                         <div className="mt-3 pt-3 border-t border-slate-700 space-y-2 text-xs">
                           <div className="flex justify-between">
-                            <span className="text-slate-400">Lucro Total:</span>
+                            <span className="text-slate-400">Lucro:</span>
                             <span className="text-green-400 font-bold">+${(data.profit/1000).toFixed(0)}K</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-400">LONGs liquidados:</span>
+                            <span className="text-slate-400">LONGs:</span>
                             <span className="text-green-400 font-bold">{data.longs}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-slate-400">SHORTs liquidados:</span>
+                            <span className="text-slate-400">SHORTs:</span>
                             <span className="text-orange-400 font-bold">{data.shorts}</span>
                           </div>
                         </div>
@@ -333,79 +340,113 @@ export default function HyperliquidWhaleTracker() {
               </div>
             </div>
 
-            {/* Lista de Whales */}
+            {/* SEÇÃO DE WHALES - AGORA VISÍVEL! */}
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-              <h3 className="font-bold text-lg mb-4">🐋 Whales Monitoradas ({whalesData.length})</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {whalesData.map((whale) => (
-                  <div 
-                    key={whale.address}
-                    className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50 hover:border-blue-500/50 transition-all"
-                  >
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center text-xs font-bold">
-                            {whale.nickname?.slice(0, 2) || 'W'}
-                          </div>
-                          <h4 className="font-bold">{whale.nickname}</h4>
-                        </div>
-                        <p className="text-xs text-slate-400 font-mono">{formatAddress(whale.address)}</p>
-                      </div>
-                      
-                      {/* Botão Excluir */}
-                      <button
-                        onClick={() => {
-                          setWhaleToDelete(whale);
-                          setShowDeleteModal(true);
-                        }}
-                        className="p-2 hover:bg-red-500/20 rounded-lg transition-all group"
-                      >
-                        <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-red-500" />
-                      </button>
-                    </div>
-
-                    {/* Métricas */}
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Valor Total:</span>
-                        <span className="font-bold text-green-400">{formatCurrency(whale.total_value)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Posições:</span>
-                        <span className="font-bold">{whale.positions_count}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">PnL 24h:</span>
-                        <span className={`font-bold ${whale.pnl_24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {whale.pnl_24h >= 0 ? '+' : ''}{formatCurrency(whale.pnl_24h)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Risco:</span>
-                        <span className={`text-xs font-bold px-2 py-1 rounded ${
-                          whale.risk_level === 'SAFE' ? 'bg-green-500/20 text-green-400' :
-                          whale.risk_level === 'MODERATE' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-red-500/20 text-red-400'
-                        }`}>
-                          {whale.risk_level}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Link */}
-                    <a
-                      href={whale.wallet_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-3"
-                    >
-                      Ver no Explorer <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-lg">🐋 Whales Monitoradas ({whalesData.length})</h3>
+                <button 
+                  onClick={loadWhalesData}
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Atualizar
+                </button>
               </div>
+
+              {whalesData.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <p>Nenhuma whale encontrada</p>
+                  <button 
+                    onClick={loadWhalesData}
+                    className="mt-4 text-blue-400 hover:text-blue-300"
+                  >
+                    Carregar dados
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {whalesData.map((whale, index) => (
+                    <div 
+                      key={whale.address || index}
+                      className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50 hover:border-blue-500/50 transition-all"
+                    >
+                      {/* Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center text-xs font-bold">
+                              {whale.nickname?.slice(0, 2) || `W${index + 1}`}
+                            </div>
+                            <h4 className="font-bold text-sm">{whale.nickname || `Whale #${index + 1}`}</h4>
+                          </div>
+                          <p className="text-xs text-slate-400 font-mono">{formatAddress(whale.address)}</p>
+                        </div>
+                        
+                        <button
+                          onClick={() => {
+                            setWhaleToDelete(whale);
+                            setShowDeleteModal(true);
+                          }}
+                          className="p-1.5 hover:bg-red-500/20 rounded transition-all group"
+                          title="Excluir whale"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-500" />
+                        </button>
+                      </div>
+
+                      {/* Métricas */}
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Valor:</span>
+                          <span className="font-bold text-green-400">
+                            {formatCurrency(whale.total_value)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Posições:</span>
+                          <span className="font-bold">{whale.positions_count || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">PnL 24h:</span>
+                          <span className={`font-bold ${(whale.pnl_24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {(whale.pnl_24h || 0) >= 0 ? '+' : ''}{formatCurrency(whale.pnl_24h)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-400">Risco:</span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                            whale.risk_level === 'SAFE' ? 'bg-green-500/20 text-green-400' :
+                            whale.risk_level === 'MODERATE' ? 'bg-yellow-500/20 text-yellow-400' :
+                            whale.risk_level === 'HIGH' ? 'bg-red-500/20 text-red-400' :
+                            'bg-slate-500/20 text-slate-400'
+                          }`}>
+                            {whale.risk_level || 'UNKNOWN'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Link */}
+                      {whale.wallet_link && (
+                        <a
+                          href={whale.wallet_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-3"
+                        >
+                          Ver no Explorer <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Info de atualização */}
+              {lastUpdate && (
+                <p className="text-xs text-slate-500 mt-4 text-center">
+                  Última atualização: {new Date(lastUpdate).toLocaleTimeString('pt-BR')}
+                </p>
+              )}
             </div>
 
           </div>
@@ -416,13 +457,14 @@ export default function HyperliquidWhaleTracker() {
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
             <Brain className="w-12 h-12 text-blue-400 mx-auto mb-4" />
             <h3 className="text-xl font-bold mb-2">Aba {tab.toUpperCase()}</h3>
-            <p className="text-slate-400">Conteúdo em desenvolvimento...</p>
+            <p className="text-slate-400">Em desenvolvimento...</p>
+            <p className="text-sm text-slate-500 mt-2">Dados das whales disponíveis na aba Command</p>
           </div>
         )}
 
       </div>
 
-      {/* Modal de Exclusão */}
+      {/* Modal */}
       {showDeleteModal && whaleToDelete && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-50">
           <div className="bg-slate-800 border border-red-500/30 rounded-2xl p-6 max-w-md w-full">
@@ -440,7 +482,7 @@ export default function HyperliquidWhaleTracker() {
               </button>
             </div>
 
-            <p className="text-slate-300 mb-2">Deseja realmente excluir a whale:</p>
+            <p className="text-slate-300 mb-2">Deseja excluir:</p>
             <p className="font-bold text-white mb-1">{whaleToDelete.nickname}</p>
             <p className="text-xs text-slate-400 font-mono mb-6">{whaleToDelete.address}</p>
 
@@ -448,14 +490,14 @@ export default function HyperliquidWhaleTracker() {
               <button
                 onClick={() => setShowDeleteModal(false)}
                 disabled={deleteLoading}
-                className="flex-1 bg-slate-700 hover:bg-slate-600 px-4 py-3 rounded-lg font-semibold"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 px-4 py-3 rounded-lg font-semibold disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => deleteWhale(whaleToDelete.address)}
                 disabled={deleteLoading}
-                className="flex-1 bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+                className="flex-1 bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {deleteLoading ? (
                   <>
