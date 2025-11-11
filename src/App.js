@@ -1,8 +1,13 @@
 import React from 'react';
-import HyperliquidWhaleTracker from './HyperliquidWhaleTracker';
+import HyperliquidPro from './components/HyperliquidPro';
+import './App.css';
 
 function App() {
-  return <HyperliquidWhaleTracker />;
+  return (
+    <div className="App">
+      <HyperliquidPro />
+    </div>
+  );
 }
 
 export default App;
