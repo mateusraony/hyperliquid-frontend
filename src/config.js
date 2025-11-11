@@ -21,49 +21,46 @@ export const CONFIG = {
   
   // Timeout para health check (mais curto)
   HEALTH_CHECK_TIMEOUT: 10000,
-
+  
   // Timeout de 60 segundos para processamento das whales
   API_TIMEOUT: 60000,
-  
 };
 
 // ============================================
 // ENDPOINTS DA API
 // ============================================
-
 export const ENDPOINTS = {
   // Health check
-  HEALTH: '/api/health',
+  HEALTH: '/',
   
   // Lista de whales
-  WHALES: '/api/whales',
+  WHALES: '/whales',
   
   // Detalhes de whale específica
-  WHALE_DETAILS: (address) => `/api/whale/${address}`,
+  WHALE_DETAILS: (address) => `/whales/${address}`,
   
   // Posições abertas
-  POSITIONS: (address) => `/api/positions/${address}`,
+  POSITIONS: (address) => `/whales/${address}`,
   
   // Histórico de trades
-  TRADES: (address) => `/api/trades/${address}`,
+  TRADES: (address) => `/whales/${address}`,
   
   // Estatísticas globais
-  STATS: '/api/stats',
+  STATS: '/monitoring/status',
   
   // Adicionar whale
-  ADD_WHALE: '/api/whale/add',
+  ADD_WHALE: '/whales',
   
-  // ✅ NOVO: Deletar whale
-  DELETE_WHALE: (address) => `/api/whale/delete/${address}`,
+  // ✅ DELETAR WHALE
+  DELETE_WHALE: (address) => `/whales/${address}`,
   
   // Forçar atualização
-  REFRESH: '/api/refresh',
+  REFRESH: '/whales',
 };
 
 // ============================================
 // MENSAGENS DE ERRO
 // ============================================
-
 export const ERROR_MESSAGES = {
   TIMEOUT: 'API está demorando muito para responder. A API pode estar processando dados das whales, aguarde 1 minuto e tente novamente.',
   NETWORK: 'Erro de conexão com a API. Verifique sua internet.',
@@ -75,7 +72,6 @@ export const ERROR_MESSAGES = {
 // ============================================
 // CORES E TEMAS
 // ============================================
-
 export const THEME = {
   colors: {
     primary: '#3b82f6',
@@ -91,7 +87,7 @@ export const THEME = {
   gradients: {
     primary: 'from-blue-600 to-purple-600',
     success: 'from-green-500 to-emerald-600',
-    danger: 'from-red-500 to-rose-600',
+    danger: 'from-red-500 to-orange-600',
     warning: 'from-yellow-500 to-orange-600',
   },
 };
@@ -99,7 +95,6 @@ export const THEME = {
 // ============================================
 // CONFIGURAÇÕES DE NOTIFICAÇÃO
 // ============================================
-
 export const NOTIFICATION_CONFIG = {
   // Tempo de exibição (ms)
   duration: 5000,
