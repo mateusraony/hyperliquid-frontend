@@ -28,10 +28,16 @@ export default function HyperliquidPro() {
     try {
       setLoading(true);
       const data = await fetchWhales();
-      setWhalesData(data);
+      
+      // Garantir que data seja sempre um array
+      const whalesArray = Array.isArray(data) ? data : (data?.whales || []);
+      
+      console.log('Whales carregadas:', whalesArray.length);
+      setWhalesData(whalesArray);
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Erro ao carregar whales:', error);
+      setWhalesData([]); // Garantir array vazio em caso de erro
     } finally {
       setLoading(false);
     }
@@ -48,14 +54,17 @@ export default function HyperliquidPro() {
 
   // Calcular métricas agregadas
   const calculateMetrics = () => {
-    if (!whalesData.length) return {
-      totalPnl: 0,
-      totalVolume: 0,
-      avgWinRate: 0,
-      totalTrades: 0,
-      longs: 0,
-      shorts: 0
-    };
+    // Garantir que whalesData seja array válido
+    if (!Array.isArray(whalesData) || whalesData.length === 0) {
+      return {
+        totalPnl: 0,
+        totalVolume: 0,
+        avgWinRate: 0,
+        totalTrades: 0,
+        longs: 0,
+        shorts: 0
+      };
+    }
 
     const totalPnl = whalesData.reduce((acc, w) => acc + (w.unrealized_pnl || 0), 0);
     const totalVolume = whalesData.reduce((acc, w) => acc + (w.account_value || 0), 0);
@@ -65,7 +74,7 @@ export default function HyperliquidPro() {
     let longs = 0;
     let shorts = 0;
     whalesData.forEach(w => {
-      if (w.positions) {
+      if (Array.isArray(w.positions)) {
         w.positions.forEach(p => {
           if (p.size > 0) longs++;
           else if (p.size < 0) shorts++;
@@ -92,13 +101,15 @@ export default function HyperliquidPro() {
   };
 
   const getStatusColor = () => {
-    if (!whalesData.length) return 'gray';
+    const hasWhales = Array.isArray(whalesData) && whalesData.length > 0;
+    if (!hasWhales) return 'gray';
     if (monitoringStatus.active) return 'green';
     return 'yellow';
   };
 
   const getStatusEmoji = () => {
-    if (!whalesData.length) return '⚪';
+    const hasWhales = Array.isArray(whalesData) && whalesData.length > 0;
+    if (!hasWhales) return '⚪';
     if (monitoringStatus.active) return '🟢';
     return '🟡';
   };
@@ -161,7 +172,7 @@ export default function HyperliquidPro() {
               <div className={`flex items-center gap-2 bg-${getStatusColor()}-500/10 border border-${getStatusColor()}-500/30 px-3 py-1 rounded text-xs`}>
                 <div className={`w-2 h-2 bg-${getStatusColor()}-400 rounded-full animate-pulse`}></div>
                 <span className={`text-${getStatusColor()}-400 font-medium flex items-center gap-1`}>
-                  {getStatusEmoji()} Live • {whalesData.length}
+                  {getStatusEmoji()} Live • {Array.isArray(whalesData) ? whalesData.length : 0}
                 </span>
               </div>
 
@@ -274,12 +285,12 @@ export default function HyperliquidPro() {
                 <h2 className="text-lg font-bold">🐋 Whales Monitoradas</h2>
               </div>
               
-              {loading && whalesData.length === 0 ? (
+              {loading && (!Array.isArray(whalesData) || whalesData.length === 0) ? (
                 <div className="p-8 text-center text-slate-400">
                   <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
                   Carregando dados...
                 </div>
-              ) : whalesData.length === 0 ? (
+              ) : !Array.isArray(whalesData) || whalesData.length === 0 ? (
                 <div className="p-8 text-center text-slate-400">
                   Nenhuma whale monitorada ainda
                 </div>
@@ -298,8 +309,8 @@ export default function HyperliquidPro() {
                       </tr>
                     </thead>
                     <tbody>
-                      {whalesData.map((whale, idx) => (
-                        <tr key={whale.address} className="border-t border-slate-800 hover:bg-slate-800/30">
+                      {Array.isArray(whalesData) && whalesData.map((whale, idx) => (
+                        <tr key={whale.address || idx} className="border-t border-slate-800 hover:bg-slate-800/30">
                           <td className="px-4 py-3 text-sm">{idx + 1}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
@@ -324,7 +335,7 @@ export default function HyperliquidPro() {
                             <div className="text-sm">{formatMoney(whale.total_margin_used)}</div>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <div className="text-sm font-medium">{whale.positions ? whale.positions.length : 0}</div>
+                            <div className="text-sm font-medium">{whale.positions && Array.isArray(whale.positions) ? whale.positions.length : 0}</div>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-center gap-2">
