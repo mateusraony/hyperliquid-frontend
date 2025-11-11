@@ -21,6 +21,10 @@ export const CONFIG = {
   
   // Timeout para health check (mais curto)
   HEALTH_CHECK_TIMEOUT: 10000,
+
+  // Timeout de 60 segundos para processamento das whales
+  API_TIMEOUT: 60000,
+  
 };
 
 // ============================================
