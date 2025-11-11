@@ -115,7 +115,7 @@ export const apiService = {
       return {
         success: true,
         data: data.whales || [],
-        total: data.total || 0,
+        total: data.count || 0,
         lastUpdate: data.last_update,
       };
     } catch (error) {
@@ -240,9 +240,10 @@ export const apiService = {
     try {
       if (!address) throw new Error('Endereço não fornecido');
       
-      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.ADD_WHALE}?address=${address}`;
+      const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.ADD_WHALE}`;
       const data = await fetchWithRetry(url, {
         method: 'POST',
+        body: JSON.stringify({ address }),
       });
       
       return {
@@ -294,7 +295,7 @@ export const apiService = {
     try {
       const url = `${CONFIG.API_BASE_URL}${ENDPOINTS.REFRESH}`;
       const data = await fetchWithRetry(url, {
-        method: 'POST',
+        method: 'GET',
       });
       
       return {
