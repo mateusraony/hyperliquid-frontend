@@ -1,6 +1,6 @@
 import React from 'react';
 import HyperliquidPro from './components/HyperliquidPro';
-import './App.css';
+import './index.css';
 
 function App() {
   return (
