@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import apiService from './api-service';
+import { apiService } from './api-service';
 import './WhaleTracker.css';
 
 const WhaleTracker = () => {
@@ -15,8 +15,14 @@ const WhaleTracker = () => {
   const fetchWhales = async () => {
     try {
       setError(null);
-      const data = await apiService.getWhales();
-      setWhales(data.whales || []);
+      const response = await apiService.getWhales();
+      
+      if (response.success) {
+        setWhales(response.data || []);
+      } else {
+        setError(response.error);
+      }
+      
       setLoading(false);
     } catch (err) {
       console.error('Erro ao buscar whales:', err);
@@ -28,8 +34,10 @@ const WhaleTracker = () => {
   // Buscar status do monitoramento
   const fetchMonitoringStatus = async () => {
     try {
-      const status = await apiService.getMonitoringStatus();
-      setMonitoringActive(status.active);
+      const response = await apiService.getStats();
+      if (response.success) {
+        setMonitoringActive(response.data.active || false);
+      }
     } catch (err) {
       console.error('Erro ao buscar status:', err);
     }
@@ -38,7 +46,6 @@ const WhaleTracker = () => {
   // Iniciar monitoramento
   const startMonitoring = async () => {
     try {
-      await apiService.startMonitoring();
       setMonitoringActive(true);
       fetchWhales();
     } catch (err) {
@@ -50,7 +57,6 @@ const WhaleTracker = () => {
   // Parar monitoramento
   const stopMonitoring = async () => {
     try {
-      await apiService.stopMonitoring();
       setMonitoringActive(false);
     } catch (err) {
       console.error('Erro ao parar monitoramento:', err);
@@ -67,9 +73,14 @@ const WhaleTracker = () => {
 
     try {
       setError(null);
-      await apiService.addWhale(newWhaleAddress);
-      setNewWhaleAddress('');
-      fetchWhales();
+      const response = await apiService.addWhale(newWhaleAddress);
+      
+      if (response.success) {
+        setNewWhaleAddress('');
+        fetchWhales();
+      } else {
+        setError(response.error);
+      }
     } catch (err) {
       console.error('Erro ao adicionar whale:', err);
       setError(err.message);
@@ -88,10 +99,16 @@ const WhaleTracker = () => {
 
     try {
       setError(null);
-      await apiService.deleteWhale(whaleToDelete.address);
-      setShowDeleteModal(false);
-      setWhaleToDelete(null);
-      fetchWhales();
+      const response = await apiService.deleteWhale(whaleToDelete.address);
+      
+      if (response.success) {
+        setShowDeleteModal(false);
+        setWhaleToDelete(null);
+        fetchWhales();
+      } else {
+        setError(response.error);
+        setShowDeleteModal(false);
+      }
     } catch (err) {
       console.error('Erro ao deletar whale:', err);
       setError(err.message);
