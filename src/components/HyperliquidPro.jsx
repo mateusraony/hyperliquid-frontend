@@ -9,6 +9,7 @@ export default function HyperliquidPro() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [monitoringStatus, setMonitoringStatus] = useState({ active: false });
+  const [selectedPeriod, setSelectedPeriod] = useState('30D'); // Novo: período selecionado
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -32,7 +33,12 @@ export default function HyperliquidPro() {
       // Garantir que data seja sempre um array
       const whalesArray = Array.isArray(data) ? data : (data?.whales || []);
       
+      console.log('=== DIAGNÓSTICO DE WHALES ===');
+      console.log('Resposta da API:', data);
       console.log('Whales carregadas:', whalesArray.length);
+      console.log('Primeira whale:', whalesArray[0]);
+      console.log('Total de endereços únicos:', new Set(whalesArray.map(w => w.address)).size);
+      
       setWhalesData(whalesArray);
       setLastUpdate(new Date());
     } catch (error) {
@@ -112,6 +118,26 @@ export default function HyperliquidPro() {
     if (!hasWhales) return '⚪';
     if (monitoringStatus.active) return '🟢';
     return '🟡';
+  };
+
+  // Função para determinar qual explorador usar
+  const getExplorerForWallet = (address) => {
+    // Wallet específica que usa HyperDash
+    const hyperDashWallet = '0x369db618f431f296e0a9d7b4f8c94fe946d3e6cf';
+    
+    if (address.toLowerCase() === hyperDashWallet.toLowerCase()) {
+      return {
+        name: 'HyperDash',
+        url: `https://hyperdash.info/address/${address}`,
+        color: 'purple'
+      };
+    }
+    
+    return {
+      name: 'Hypurrscan',
+      url: `https://hypurrscan.io/address/${address}`,
+      color: 'blue'
+    };
   };
 
   const tabs = [
@@ -250,21 +276,47 @@ export default function HyperliquidPro() {
 
             {/* Métricas LONG vs SHORT */}
             <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur rounded-xl p-6 border border-slate-700/50">
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
-                <h2 className="text-lg font-bold">📊 Métricas LONG vs SHORT (30 dias)</h2>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-blue-400" />
+                  <h2 className="text-lg font-bold">📊 Métricas LONG vs SHORT</h2>
+                </div>
+                
+                {/* Botões de período */}
+                <div className="flex gap-2">
+                  {['1D', '7D', '30D'].map(period => (
+                    <button
+                      key={period}
+                      onClick={() => setSelectedPeriod(period)}
+                      className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                        selectedPeriod === period
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                      }`}>
+                      {period}
+                    </button>
+                  ))}
+                </div>
               </div>
               
               <div className="grid grid-cols-4 gap-6">
                 <div>
                   <div className="text-sm text-slate-400 mb-1">Total LONGs</div>
                   <div className="text-3xl font-bold text-green-400">{metrics.longs}</div>
-                  <div className="text-xs text-slate-500 mt-1">62% dos trades</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {metrics.longs + metrics.shorts > 0 
+                      ? Math.round((metrics.longs / (metrics.longs + metrics.shorts)) * 100) 
+                      : 0}% dos trades
+                  </div>
                 </div>
                 <div>
                   <div className="text-sm text-slate-400 mb-1">Total SHORTs</div>
                   <div className="text-3xl font-bold text-orange-400">{metrics.shorts}</div>
-                  <div className="text-xs text-slate-500 mt-1">38% dos trades</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {metrics.longs + metrics.shorts > 0 
+                      ? Math.round((metrics.shorts / (metrics.longs + metrics.shorts)) * 100) 
+                      : 0}% dos trades
+                  </div>
                 </div>
                 <div>
                   <div className="text-sm text-slate-400 mb-1">LONGs Win Rate</div>
@@ -339,20 +391,18 @@ export default function HyperliquidPro() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-center gap-2">
-                              <a 
-                                href={`https://hypurrscan.io/address/${whale.address}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded text-xs hover:bg-blue-500/20">
-                                Hypurrscan
-                              </a>
-                              <a 
-                                href={`https://hyperdash.info/address/${whale.address}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs hover:bg-purple-500/20">
-                                HyperDash
-                              </a>
+                              {(() => {
+                                const explorer = getExplorerForWallet(whale.address);
+                                return (
+                                  <a 
+                                    href={explorer.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`px-2 py-1 bg-${explorer.color}-500/10 text-${explorer.color}-400 rounded text-xs hover:bg-${explorer.color}-500/20`}>
+                                    {explorer.name}
+                                  </a>
+                                );
+                              })()}
                             </div>
                           </td>
                         </tr>
