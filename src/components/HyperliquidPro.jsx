@@ -10,7 +10,6 @@ export default function HyperliquidPro() {
   const [expandedWallet, setExpandedWallet] = useState(null);
   const [selectedAnalyticsWallet, setSelectedAnalyticsWallet] = useState('Sigma Whale');
   const [simulatorCapital, setSimulatorCapital] = useState(10000);
-  const [expandedMetric, setExpandedMetric] = useState(null);
   const [systemStatus, setSystemStatus] = useState('online');
 
   // Estados da API
@@ -35,24 +34,12 @@ export default function HyperliquidPro() {
   const [sortField, setSortField] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
 
-  // Dados de liquidação com LONG/SHORT
+  // Dados de liquidação (SEMPRE VISÍVEIS)
   const liquidationData = {
     '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
-    '7D': { total: 8920000, trades: 67, profit: 1890000, longs: 42, shorts: 25 },
     '1W': { total: 8920000, trades: 67, profit: 1890000, longs: 42, shorts: 25 },
     '1M': { total: 24500000, trades: 234, profit: 4870000, longs: 145, shorts: 89 },
   };
-
-  const recentTrades = [
-    { id: 1, wallet: 'Sigma Whale', token: 'BTC', type: 'LONG', size: 98000, entry: 66500, exit: 67890, pnl: 20482, pnlPct: 20.9, lev: 10, dur: '14h 32m', time: '23m ago', result: 'WIN' },
-    { id: 2, wallet: 'Alpha Hunter', token: 'ETH', type: 'SHORT', size: 52000, entry: 3520, exit: 3456, pnl: 945, pnlPct: 1.8, lev: 5, dur: '2h 15m', time: '1h ago', result: 'WIN' },
-    { id: 3, wallet: 'Diamond Hands', token: 'SOL', type: 'LONG', size: 73000, entry: 172.30, exit: 178.45, pnl: 2610, pnlPct: 3.6, lev: 8, dur: '8h 45m', time: '3h ago', result: 'WIN' },
-  ];
-
-  const pendingOrders = [
-    { id: 1, wallet: 'Sigma Whale', token: 'BTC', type: 'LIMIT_BUY', price: 66000, size: 150000, lev: 10, placed: '2h ago', status: 'active', reason: 'Waiting for dip to support' },
-    { id: 2, wallet: 'Alpha Hunter', token: 'ETH', type: 'STOP_LOSS', price: 3380, size: 85000, placed: '1h ago', status: 'active', reason: 'Protect current LONG position' },
-  ];
 
   const riskMetrics = {
     portfolioHeat: 45,
@@ -60,13 +47,7 @@ export default function HyperliquidPro() {
     avgRR: 2.8,
     correlation: 78,
     var95: -12450,
-    maxDrawdown: -18.7,
-    totalFees: 2847,
-    netPnL: 18920,
-    grossPnL: 21767
   };
-
-  const COLORS = { LONG: '#10b981', SHORT: '#f59e0b' };
 
   // Buscar dados das whales
   const fetchWhales = async () => {
@@ -239,7 +220,24 @@ export default function HyperliquidPro() {
     return () => clearInterval(interval);
   }, []);
 
+  // Formatação MELHORADA para caber nas caixas
   const formatCurrency = (value) => {
+    if (!value && value !== 0) return '$0';
+    
+    const absValue = Math.abs(value);
+    
+    if (absValue >= 1000000000) {
+      return `$${(value / 1000000000).toFixed(1)}B`;
+    } else if (absValue >= 1000000) {
+      return `$${(value / 1000000).toFixed(1)}M`;
+    } else if (absValue >= 1000) {
+      return `$${(value / 1000).toFixed(0)}K`;
+    } else {
+      return `$${value.toFixed(0)}`;
+    }
+  };
+
+  const formatCurrencyFull = (value) => {
     if (!value && value !== 0) return '$0';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -270,7 +268,7 @@ export default function HyperliquidPro() {
     return 'red';
   };
 
-  // Calcular métricas totais das whales
+  // Calcular métricas totais REAIS das whales
   const totalMetrics = whalesData.reduce((acc, whale) => {
     acc.totalValue += whale.accountValue || 0;
     acc.totalPnL += whale.unrealizedPnl || 0;
@@ -300,6 +298,16 @@ export default function HyperliquidPro() {
         }
         ::-webkit-scrollbar-thumb:hover {
           background: linear-gradient(180deg, #2563eb 0%, #7c3aed 100%);
+        }
+        /* Prevenir overflow em todos os cards */
+        .metric-card {
+          overflow: hidden;
+        }
+        .metric-value {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
         }
       `}</style>
 
@@ -375,46 +383,46 @@ export default function HyperliquidPro() {
         
         {tab === 'command' && (
           <div className="space-y-4">
-            {/* Métricas Principais com dados REAIS */}
-            <div className="grid grid-cols-8 gap-3">
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+            {/* Métricas Principais com dados REAIS - CSS CORRIGIDO */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                 <p className="text-slate-400 text-xs uppercase mb-1">Total Value</p>
-                <p className="text-2xl font-bold text-green-400">{formatCurrency(totalMetrics.totalValue)}</p>
+                <p className="metric-value text-2xl font-bold text-green-400">{formatCurrency(totalMetrics.totalValue)}</p>
                 <p className="text-xs text-slate-400">Live</p>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                 <p className="text-slate-400 text-xs uppercase mb-1">Posições</p>
-                <p className="text-2xl font-bold text-blue-400">{totalMetrics.totalPositions}</p>
+                <p className="metric-value text-2xl font-bold text-blue-400">{totalMetrics.totalPositions}</p>
                 <p className="text-xs text-slate-400">Ativas</p>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
-                <p className="text-slate-400 text-xs uppercase mb-1">PnL 24h</p>
-                <p className="text-2xl font-bold text-green-400">{formatCurrency(totalMetrics.totalPnL)}</p>
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">PNL 24h</p>
+                <p className="metric-value text-2xl font-bold text-green-400">{formatCurrency(totalMetrics.totalPnL)}</p>
                 <p className="text-xs text-green-400">Não realizado</p>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                 <p className="text-slate-400 text-xs uppercase mb-1">Whales</p>
-                <p className="text-2xl font-bold text-purple-400">{whalesData.length}</p>
+                <p className="metric-value text-2xl font-bold text-purple-400">{whalesData.length}</p>
                 <p className="text-xs text-slate-400">Monitoradas</p>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                 <p className="text-slate-400 text-xs uppercase mb-1">Win Rate</p>
-                <p className="text-2xl font-bold text-green-400">79.3%</p>
+                <p className="metric-value text-2xl font-bold text-green-400">79.3%</p>
                 <p className="text-xs text-slate-400">+2.1%</p>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                 <p className="text-slate-400 text-xs uppercase mb-1">Sharpe</p>
-                <p className="text-2xl font-bold text-yellow-400">2.84</p>
+                <p className="metric-value text-2xl font-bold text-yellow-400">2.84</p>
                 <p className="text-xs text-slate-400">Excellent</p>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                 <p className="text-slate-400 text-xs uppercase mb-1">Heat</p>
-                <p className="text-2xl font-bold text-orange-400">45%</p>
+                <p className="metric-value text-2xl font-bold text-orange-400">45%</p>
                 <p className="text-xs text-slate-400">MEDIUM</p>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                 <p className="text-slate-400 text-xs uppercase mb-1">Alerts</p>
-                <p className="text-2xl font-bold text-cyan-400">47</p>
+                <p className="metric-value text-2xl font-bold text-cyan-400">47</p>
                 <p className="text-xs text-slate-400">12 high</p>
               </div>
             </div>
@@ -425,7 +433,7 @@ export default function HyperliquidPro() {
                 <BarChart3 className="w-5 h-5 text-blue-400" />
                 <h3 className="text-lg font-bold">📊 Métricas LONG vs SHORT (30 dias)</h3>
               </div>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">Total LONGs</p>
                   <p className="text-3xl font-bold text-green-400">145</p>
@@ -449,53 +457,54 @@ export default function HyperliquidPro() {
               </div>
             </div>
 
-            {/* Dados de Liquidação expansíveis */}
+            {/* Liquidações SEMPRE ABERTAS - SEM COLLAPSE */}
             <div className="bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-lg p-4">
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-3 mb-4">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
                 <h3 className="text-lg font-bold">⚡ Liquidações Capturadas</h3>
+                <span className="text-xs text-slate-400">(valores em perdas de traders liquidados)</span>
               </div>
-              <div className="grid grid-cols-4 gap-3">
-                {Object.entries(liquidationData).map(([period, data]) => {
-                  const isExpanded = expandedMetric === period;
-                  return (
-                    <div key={period} 
-                      onClick={() => setExpandedMetric(isExpanded ? null : period)}
-                      className="bg-slate-900/50 rounded-lg p-3 cursor-pointer hover:bg-slate-800/50 transition-all">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Object.entries(liquidationData).map(([period, data]) => (
+                  <div key={period} className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50">
+                    <div className="mb-3">
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs text-slate-400 font-bold">{period}</p>
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        <p className="text-sm text-slate-300 font-bold">{period}</p>
+                        <p className="text-2xl font-bold text-red-400 metric-value">${(data.total/1000000).toFixed(1)}M</p>
                       </div>
-                      <p className="text-2xl font-bold text-red-400">${(data.total/1000000).toFixed(1)}M</p>
-                      <p className="text-xs text-slate-400">{data.trades} liquidações</p>
-                      
-                      {isExpanded && (
-                        <div className="mt-3 pt-3 border-t border-slate-700 space-y-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-slate-400">Lucro Total:</span>
-                            <span className="text-green-400 font-bold">+${(data.profit/1000).toFixed(0)}K</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-400">LONGs liquidados:</span>
-                            <span className="text-green-400 font-bold">{data.longs}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-400">SHORTs liquidados:</span>
-                            <span className="text-orange-400 font-bold">{data.shorts}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-400">Avg por trade:</span>
-                            <span className="font-bold">${(data.profit/data.trades/1000).toFixed(1)}K</span>
-                          </div>
-                        </div>
-                      )}
+                      <p className="text-xs text-slate-400">{data.trades} liquidações capturadas</p>
                     </div>
-                  );
-                })}
+                    
+                    <div className="space-y-2 text-xs border-t border-slate-700 pt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">💰 Lucro Capturado:</span>
+                        <span className="text-green-400 font-bold metric-value">+${(data.profit/1000).toFixed(0)}K</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">📈 LONGs liquidados:</span>
+                        <span className="text-green-400 font-bold">{data.longs}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">📉 SHORTs liquidados:</span>
+                        <span className="text-orange-400 font-bold">{data.shorts}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">⚡ Média/trade:</span>
+                        <span className="font-bold metric-value">${(data.profit/data.trades/1000).toFixed(1)}K</span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-slate-700/50">
+                        <p className="text-[10px] text-slate-500 italic">
+                          Quando traders são liquidados, suas posições são fechadas à força. 
+                          Você pode lucrar posicionando-se contra eles antes da liquidação.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Lista de Whales Monitoradas - COM DADOS REAIS DA API */}
+            {/* Lista de Whales Monitoradas - COM NICKNAME PERSISTINDO */}
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-bold">🐋 Whales Monitoradas ({whalesData.length})</h3>
@@ -543,14 +552,14 @@ export default function HyperliquidPro() {
                       {sortedData.map((whale, idx) => (
                         <tr key={whale.address} className="border-b border-slate-700/30 hover:bg-slate-700/20">
                           <td className="py-2 px-3">
-                            <div className="font-semibold">{whale.nickname || `Whale #${idx + 1}`}</div>
-                            <div className="text-xs text-slate-400 font-mono">{whale.address.slice(0, 6)}...{whale.address.slice(-4)}</div>
+                            <div className="font-semibold metric-value">{whale.nickname || `Whale #${idx + 1}`}</div>
+                            <div className="text-xs text-slate-400 font-mono metric-value">{whale.address.slice(0, 6)}...{whale.address.slice(-4)}</div>
                           </td>
-                          <td className="text-right py-2 px-3 text-blue-400 font-bold">{formatCurrency(whale.accountValue || 0)}</td>
-                          <td className={`text-right py-2 px-3 font-bold ${(whale.unrealizedPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <td className="text-right py-2 px-3 text-blue-400 font-bold metric-value">{formatCurrency(whale.accountValue || 0)}</td>
+                          <td className={`text-right py-2 px-3 font-bold metric-value ${(whale.unrealizedPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {formatCurrency(whale.unrealizedPnl || 0)}
                           </td>
-                          <td className="text-right py-2 px-3">{formatCurrency(whale.marginUsed || 0)}</td>
+                          <td className="text-right py-2 px-3 metric-value">{formatCurrency(whale.marginUsed || 0)}</td>
                           <td className="text-center py-2 px-3 font-bold">{(whale.positions || []).length}</td>
                           <td className="text-center py-2 px-3">
                             <div className="flex items-center justify-center gap-2">
@@ -579,29 +588,29 @@ export default function HyperliquidPro() {
                 <Shield className="w-5 h-5 text-red-400" />
                 <h3 className="text-lg font-bold">⚠️ Risk Dashboard</h3>
               </div>
-              <div className="grid grid-cols-5 gap-4">
-                <div className="bg-slate-900/50 rounded p-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="metric-card bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">Portfolio Heat</p>
-                  <p className="text-2xl font-bold text-orange-400">{riskMetrics.portfolioHeat}%</p>
+                  <p className="metric-value text-2xl font-bold text-orange-400">{riskMetrics.portfolioHeat}%</p>
                   <p className="text-xs text-slate-400">MEDIUM Risk</p>
                 </div>
-                <div className="bg-slate-900/50 rounded p-3">
+                <div className="metric-card bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">Capital at Risk</p>
-                  <p className="text-xl font-bold">${(riskMetrics.capitalAtRisk/1000).toFixed(0)}K</p>
+                  <p className="metric-value text-xl font-bold">${(riskMetrics.capitalAtRisk/1000).toFixed(0)}K</p>
                 </div>
-                <div className="bg-slate-900/50 rounded p-3">
+                <div className="metric-card bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">Avg R:R Ratio</p>
-                  <p className="text-xl font-bold text-green-400">1:{riskMetrics.avgRR}</p>
+                  <p className="metric-value text-xl font-bold text-green-400">1:{riskMetrics.avgRR}</p>
                   <p className="text-xs text-green-400">GOOD</p>
                 </div>
-                <div className="bg-slate-900/50 rounded p-3">
+                <div className="metric-card bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">Correlation Risk</p>
-                  <p className="text-xl font-bold text-red-400">{riskMetrics.correlation}%</p>
+                  <p className="metric-value text-xl font-bold text-red-400">{riskMetrics.correlation}%</p>
                   <p className="text-xs text-red-400">HIGH</p>
                 </div>
-                <div className="bg-slate-900/50 rounded p-3">
+                <div className="metric-card bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">VaR (95%)</p>
-                  <p className="text-xl font-bold text-red-400">${(riskMetrics.var95/1000).toFixed(1)}K</p>
+                  <p className="metric-value text-xl font-bold text-red-400">${(riskMetrics.var95/1000).toFixed(1)}K</p>
                   <p className="text-xs text-slate-400">Worst scenario</p>
                 </div>
               </div>
@@ -609,28 +618,7 @@ export default function HyperliquidPro() {
           </div>
         )}
 
-        {tab === 'positions' && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-            <h2 className="text-xl font-bold mb-4">📈 Posições Abertas</h2>
-            <p className="text-slate-400">Em desenvolvimento - posições das {whalesData.length} whales monitoradas</p>
-          </div>
-        )}
-
-        {tab === 'trades' && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-            <h2 className="text-xl font-bold mb-4">📊 Histórico de Trades</h2>
-            <p className="text-slate-400">Em desenvolvimento</p>
-          </div>
-        )}
-
-        {tab === 'orders' && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-            <h2 className="text-xl font-bold mb-4">⏰ Ordens Pendentes</h2>
-            <p className="text-slate-400">Em desenvolvimento</p>
-          </div>
-        )}
-
-        {['ai-token', 'ai-wallet', 'analytics', 'risk', 'simulator', 'board'].includes(tab) && (
+        {tab !== 'command' && (
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
             <h2 className="text-xl font-bold mb-4">Em desenvolvimento</h2>
             <p className="text-slate-400">Aba {tab} será implementada em breve</p>
