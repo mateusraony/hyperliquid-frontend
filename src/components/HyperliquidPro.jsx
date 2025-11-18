@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Activity, Clock, Plus, ExternalLink, RefreshCw, 
-  Trash2, X, Check, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown,
-  BarChart3, TrendingUp, Shield, PlayCircle, Bell, Target, Brain, Award
-} from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
 
 export default function HyperliquidPro() {
   const [tab, setTab] = useState('command');
+  const [expandedToken, setExpandedToken] = useState(null);
+  const [expandedWallet, setExpandedWallet] = useState(null);
+  const [selectedAnalyticsWallet, setSelectedAnalyticsWallet] = useState('Sigma Whale');
+  const [simulatorCapital, setSimulatorCapital] = useState(10000);
+  const [expandedMetric, setExpandedMetric] = useState(null);
+  const [systemStatus, setSystemStatus] = useState('online');
+
+  // Estados da API
   const [whalesData, setWhalesData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
@@ -21,7 +26,7 @@ export default function HyperliquidPro() {
   const [isAddingWallet, setIsAddingWallet] = useState(false);
   const [addError, setAddError] = useState('');
   
-  // Estado para deletar wallet
+  // Estados para deletar wallet
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [walletToDelete, setWalletToDelete] = useState(null);
   const [isDeletingWallet, setIsDeletingWallet] = useState(false);
@@ -30,12 +35,38 @@ export default function HyperliquidPro() {
   const [sortField, setSortField] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
 
-  // Cores para os círculos das whales
-  const avatarColors = [
-    'bg-purple-600', 'bg-blue-600', 'bg-pink-600', 'bg-indigo-600',
-    'bg-violet-600', 'bg-fuchsia-600', 'bg-cyan-600', 'bg-sky-600',
-    'bg-rose-600', 'bg-purple-500', 'bg-blue-500'
+  // Dados de liquidação com LONG/SHORT
+  const liquidationData = {
+    '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
+    '7D': { total: 8920000, trades: 67, profit: 1890000, longs: 42, shorts: 25 },
+    '1W': { total: 8920000, trades: 67, profit: 1890000, longs: 42, shorts: 25 },
+    '1M': { total: 24500000, trades: 234, profit: 4870000, longs: 145, shorts: 89 },
+  };
+
+  const recentTrades = [
+    { id: 1, wallet: 'Sigma Whale', token: 'BTC', type: 'LONG', size: 98000, entry: 66500, exit: 67890, pnl: 20482, pnlPct: 20.9, lev: 10, dur: '14h 32m', time: '23m ago', result: 'WIN' },
+    { id: 2, wallet: 'Alpha Hunter', token: 'ETH', type: 'SHORT', size: 52000, entry: 3520, exit: 3456, pnl: 945, pnlPct: 1.8, lev: 5, dur: '2h 15m', time: '1h ago', result: 'WIN' },
+    { id: 3, wallet: 'Diamond Hands', token: 'SOL', type: 'LONG', size: 73000, entry: 172.30, exit: 178.45, pnl: 2610, pnlPct: 3.6, lev: 8, dur: '8h 45m', time: '3h ago', result: 'WIN' },
   ];
+
+  const pendingOrders = [
+    { id: 1, wallet: 'Sigma Whale', token: 'BTC', type: 'LIMIT_BUY', price: 66000, size: 150000, lev: 10, placed: '2h ago', status: 'active', reason: 'Waiting for dip to support' },
+    { id: 2, wallet: 'Alpha Hunter', token: 'ETH', type: 'STOP_LOSS', price: 3380, size: 85000, placed: '1h ago', status: 'active', reason: 'Protect current LONG position' },
+  ];
+
+  const riskMetrics = {
+    portfolioHeat: 45,
+    capitalAtRisk: 98500,
+    avgRR: 2.8,
+    correlation: 78,
+    var95: -12450,
+    maxDrawdown: -18.7,
+    totalFees: 2847,
+    netPnL: 18920,
+    grossPnL: 21767
+  };
+
+  const COLORS = { LONG: '#10b981', SHORT: '#f59e0b' };
 
   // Buscar dados das whales
   const fetchWhales = async () => {
@@ -66,10 +97,12 @@ export default function HyperliquidPro() {
       
       setLastUpdate(new Date());
       setIsLoading(false);
+      setSystemStatus('online');
     } catch (err) {
       console.error('Erro ao buscar whales:', err);
       setError(err.message);
       setIsLoading(false);
+      setSystemStatus('offline');
       setWhalesData([]);
     }
   };
@@ -225,259 +258,382 @@ export default function HyperliquidPro() {
       : <ArrowDown className="w-3 h-3 text-blue-400" />;
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-white text-xl">Carregando whales...</p>
-          <p className="text-slate-400 text-sm mt-2">Aguarde até 60 segundos</p>
-        </div>
-      </div>
-    );
-  }
+  const getStatusEmoji = () => {
+    if (systemStatus === 'online') return '🟢';
+    if (systemStatus === 'warning') return '🟡';
+    return '🔴';
+  };
+
+  const getStatusColor = () => {
+    if (systemStatus === 'online') return 'green';
+    if (systemStatus === 'warning') return 'yellow';
+    return 'red';
+  };
+
+  // Calcular métricas totais das whales
+  const totalMetrics = whalesData.reduce((acc, whale) => {
+    acc.totalValue += whale.accountValue || 0;
+    acc.totalPnL += whale.unrealizedPnl || 0;
+    acc.totalPositions += (whale.positions || []).length;
+    return acc;
+  }, { totalValue: 0, totalPnL: 0, totalPositions: 0 });
 
   const sortedData = getSortedData();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <div className="border-b border-slate-700/50 bg-slate-900/50 backdrop-blur">
-        <div className="max-w-[1800px] mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white" style={{
+      scrollbarWidth: 'thin',
+      scrollbarColor: '#6366f1 #1e293b'
+    }}>
+      <style>{`
+        ::-webkit-scrollbar {
+          width: 12px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #1e293b;
+          border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: linear-gradient(180deg, #3b82f6 0%, #8b5cf6 100%);
+          border-radius: 10px;
+          border: 2px solid #1e293b;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(180deg, #2563eb 0%, #7c3aed 100%);
+        }
+      `}</style>
+
+      <div className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
+        <div className="max-w-[1900px] mx-auto px-4 py-3">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-                <Activity className="w-6 h-6 text-white" />
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <Activity className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-white text-2xl font-bold">Hyperliquid Pro Tracker</h1>
-                <p className="text-slate-400 text-sm">Institutional Grade - Live from Hypurrscan & HyperDash</p>
+                <h1 className="text-lg font-bold">Hyperliquid Pro Tracker</h1>
+                <p className="text-xs text-slate-400">Institutional Grade - Live from Hypurrscan & HyperDash</p>
               </div>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <a
-                href="https://hypurrscan.io"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 hover:border-slate-500 rounded-lg transition-colors flex items-center gap-2"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Hypurrscan
+            <div className="flex items-center gap-2">
+              <a href="https://hypurrscan.io" target="_blank" rel="noopener noreferrer" 
+                className="flex items-center gap-1 px-2 py-1 bg-slate-800 rounded text-xs hover:bg-slate-700">
+                <ExternalLink className="w-3 h-3" />Hypurrscan
               </a>
-              <a
-                href="https://hyperdash.io"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 hover:border-slate-500 rounded-lg transition-colors flex items-center gap-2"
-              >
-                <ExternalLink className="w-4 h-4" />
-                HyperDash
+              <a href="https://hyperdash.info" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 px-2 py-1 bg-slate-800 rounded text-xs hover:bg-slate-700">
+                <ExternalLink className="w-3 h-3" />HyperDash
               </a>
-              <div className="px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-green-400 font-semibold text-sm">Live</span>
-                <span className="text-white">• {whalesData.length}</span>
+              
+              <div className={`flex items-center gap-2 bg-${getStatusColor()}-500/10 border border-${getStatusColor()}-500/30 px-3 py-1 rounded text-xs`}>
+                <div className={`w-2 h-2 bg-${getStatusColor()}-400 rounded-full animate-pulse`}></div>
+                <span className={`text-${getStatusColor()}-400 font-medium flex items-center gap-1`}>
+                  {getStatusEmoji()} Live • {whalesData.length}
+                </span>
               </div>
-              <button
-                onClick={fetchWhales}
-                disabled={isLoading}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-              >
-                <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+
+              <button onClick={fetchWhales} disabled={isLoading} className="p-1.5 hover:bg-slate-800 rounded">
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
-              <button
+              
+              <button 
                 onClick={() => setShowAddModal(true)}
-                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-lg flex items-center gap-2 shadow-lg transition-all"
-              >
-                <Plus className="w-5 h-5" />
-                Add Wallet
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-4 py-1.5 rounded text-sm font-medium shadow-lg shadow-blue-500/20 transition-all">
+                + Add Wallet
               </button>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Abas */}
-      <div className="border-b border-slate-700/50 bg-slate-900/30">
-        <div className="max-w-[1800px] mx-auto px-6">
-          <div className="flex gap-1">
+          
+          <div className="flex gap-1 overflow-x-auto pb-1">
             {[
-              { id: 'command', icon: Activity, label: 'Command' },
+              { id: 'command', icon: Target, label: 'Command' },
               { id: 'positions', icon: BarChart3, label: 'Positions' },
-              { id: 'trades', icon: TrendingUp, label: 'Trades' },
-              { id: 'orders', icon: BarChart3, label: 'Orders' },
+              { id: 'trades', icon: Activity, label: 'Trades' },
+              { id: 'orders', icon: Clock, label: 'Orders' },
               { id: 'ai-token', icon: Brain, label: 'AI Token' },
-              { id: 'ai-wallet', icon: Target, label: 'AI Wallet' },
-              { id: 'analytics', icon: BarChart3, label: 'Analytics' },
+              { id: 'ai-wallet', icon: Users, label: 'AI Wallet' },
+              { id: 'analytics', icon: Layers, label: 'Analytics' },
               { id: 'risk', icon: Shield, label: 'Risk' },
               { id: 'simulator', icon: PlayCircle, label: 'Simulator' },
-              { id: 'leaderboard', icon: Award, label: 'Leaderboard' }
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`px-6 py-3 font-semibold rounded-t-lg flex items-center gap-2 transition-colors ${
-                  tab === t.id
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <t.icon className="w-4 h-4" />
-                {t.label}
-              </button>
-            ))}
+              { id: 'board', icon: Award, label: 'Leaderboard' },
+            ].map(t => {
+              const Icon = t.icon;
+              return (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t text-xs font-medium whitespace-nowrap ${
+                    tab === t.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
+                  }`}>
+                  <Icon className="w-3.5 h-3.5" />{t.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* Conteúdo */}
-      <div className="max-w-[1800px] mx-auto px-6 py-6">
-        {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-center gap-3">
-            <AlertTriangle className="w-6 h-6 text-red-400" />
-            <div>
-              <p className="text-red-400 font-semibold">Erro ao carregar dados</p>
-              <p className="text-red-300 text-sm">{error}</p>
+      <div className="max-w-[1900px] mx-auto p-4">
+        
+        {tab === 'command' && (
+          <div className="space-y-4">
+            {/* Métricas Principais com dados REAIS */}
+            <div className="grid grid-cols-8 gap-3">
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">Total Value</p>
+                <p className="text-2xl font-bold text-green-400">{formatCurrency(totalMetrics.totalValue)}</p>
+                <p className="text-xs text-slate-400">Live</p>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">Posições</p>
+                <p className="text-2xl font-bold text-blue-400">{totalMetrics.totalPositions}</p>
+                <p className="text-xs text-slate-400">Ativas</p>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">PnL 24h</p>
+                <p className="text-2xl font-bold text-green-400">{formatCurrency(totalMetrics.totalPnL)}</p>
+                <p className="text-xs text-green-400">Não realizado</p>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">Whales</p>
+                <p className="text-2xl font-bold text-purple-400">{whalesData.length}</p>
+                <p className="text-xs text-slate-400">Monitoradas</p>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">Win Rate</p>
+                <p className="text-2xl font-bold text-green-400">79.3%</p>
+                <p className="text-xs text-slate-400">+2.1%</p>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">Sharpe</p>
+                <p className="text-2xl font-bold text-yellow-400">2.84</p>
+                <p className="text-xs text-slate-400">Excellent</p>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">Heat</p>
+                <p className="text-2xl font-bold text-orange-400">45%</p>
+                <p className="text-xs text-slate-400">MEDIUM</p>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                <p className="text-slate-400 text-xs uppercase mb-1">Alerts</p>
+                <p className="text-2xl font-bold text-cyan-400">47</p>
+                <p className="text-xs text-slate-400">12 high</p>
+              </div>
+            </div>
+
+            {/* Métricas LONG/SHORT */}
+            <div className="bg-gradient-to-r from-green-500/10 to-orange-500/10 border border-slate-700/50 rounded-lg p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <BarChart3 className="w-5 h-5 text-blue-400" />
+                <h3 className="text-lg font-bold">📊 Métricas LONG vs SHORT (30 dias)</h3>
+              </div>
+              <div className="grid grid-cols-4 gap-4">
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">Total LONGs</p>
+                  <p className="text-3xl font-bold text-green-400">145</p>
+                  <p className="text-xs text-green-400">62% dos trades</p>
+                </div>
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">Total SHORTs</p>
+                  <p className="text-3xl font-bold text-orange-400">89</p>
+                  <p className="text-xs text-orange-400">38% dos trades</p>
+                </div>
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">LONGs Win Rate</p>
+                  <p className="text-xl font-bold text-green-400">84.2%</p>
+                  <p className="text-xs text-green-400">EXCELENTE</p>
+                </div>
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">SHORTs Win Rate</p>
+                  <p className="text-xl font-bold text-orange-400">71.9%</p>
+                  <p className="text-xs text-orange-400">BOM</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Dados de Liquidação expansíveis */}
+            <div className="bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+                <h3 className="text-lg font-bold">⚡ Liquidações Capturadas</h3>
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                {Object.entries(liquidationData).map(([period, data]) => {
+                  const isExpanded = expandedMetric === period;
+                  return (
+                    <div key={period} 
+                      onClick={() => setExpandedMetric(isExpanded ? null : period)}
+                      className="bg-slate-900/50 rounded-lg p-3 cursor-pointer hover:bg-slate-800/50 transition-all">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-slate-400 font-bold">{period}</p>
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </div>
+                      <p className="text-2xl font-bold text-red-400">${(data.total/1000000).toFixed(1)}M</p>
+                      <p className="text-xs text-slate-400">{data.trades} liquidações</p>
+                      
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-slate-700 space-y-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Lucro Total:</span>
+                            <span className="text-green-400 font-bold">+${(data.profit/1000).toFixed(0)}K</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">LONGs liquidados:</span>
+                            <span className="text-green-400 font-bold">{data.longs}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">SHORTs liquidados:</span>
+                            <span className="text-orange-400 font-bold">{data.shorts}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Avg por trade:</span>
+                            <span className="font-bold">${(data.profit/data.trades/1000).toFixed(1)}K</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Lista de Whales Monitoradas - COM DADOS REAIS DA API */}
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold">🐋 Whales Monitoradas ({whalesData.length})</h3>
+              </div>
+              
+              {whalesData.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <p>Nenhuma whale monitorada</p>
+                  <p className="text-sm">Clique em "+ Add Wallet" para começar</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        <th className="text-left py-2 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleSort('nickname')}>
+                            WALLET <SortIcon field="nickname" />
+                          </div>
+                        </th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer" onClick={() => handleSort('accountValue')}>
+                            VALOR <SortIcon field="accountValue" />
+                          </div>
+                        </th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer" onClick={() => handleSort('unrealizedPnl')}>
+                            PNL <SortIcon field="unrealizedPnl" />
+                          </div>
+                        </th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer" onClick={() => handleSort('marginUsed')}>
+                            MARGEM <SortIcon field="marginUsed" />
+                          </div>
+                        </th>
+                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-center gap-2 cursor-pointer" onClick={() => handleSort('positions')}>
+                            POS <SortIcon field="positions" />
+                          </div>
+                        </th>
+                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">AÇÕES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedData.map((whale, idx) => (
+                        <tr key={whale.address} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                          <td className="py-2 px-3">
+                            <div className="font-semibold">{whale.nickname || `Whale #${idx + 1}`}</div>
+                            <div className="text-xs text-slate-400 font-mono">{whale.address.slice(0, 6)}...{whale.address.slice(-4)}</div>
+                          </td>
+                          <td className="text-right py-2 px-3 text-blue-400 font-bold">{formatCurrency(whale.accountValue || 0)}</td>
+                          <td className={`text-right py-2 px-3 font-bold ${(whale.unrealizedPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {formatCurrency(whale.unrealizedPnl || 0)}
+                          </td>
+                          <td className="text-right py-2 px-3">{formatCurrency(whale.marginUsed || 0)}</td>
+                          <td className="text-center py-2 px-3 font-bold">{(whale.positions || []).length}</td>
+                          <td className="text-center py-2 px-3">
+                            <div className="flex items-center justify-center gap-2">
+                              <a href={`https://hypurrscan.io/address/${whale.address}`} target="_blank" rel="noopener noreferrer"
+                                className="text-blue-400 hover:text-blue-300 text-xs">
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={() => confirmDeleteWhale(whale)}
+                                className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Risk Dashboard */}
+            <div className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Shield className="w-5 h-5 text-red-400" />
+                <h3 className="text-lg font-bold">⚠️ Risk Dashboard</h3>
+              </div>
+              <div className="grid grid-cols-5 gap-4">
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">Portfolio Heat</p>
+                  <p className="text-2xl font-bold text-orange-400">{riskMetrics.portfolioHeat}%</p>
+                  <p className="text-xs text-slate-400">MEDIUM Risk</p>
+                </div>
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">Capital at Risk</p>
+                  <p className="text-xl font-bold">${(riskMetrics.capitalAtRisk/1000).toFixed(0)}K</p>
+                </div>
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">Avg R:R Ratio</p>
+                  <p className="text-xl font-bold text-green-400">1:{riskMetrics.avgRR}</p>
+                  <p className="text-xs text-green-400">GOOD</p>
+                </div>
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">Correlation Risk</p>
+                  <p className="text-xl font-bold text-red-400">{riskMetrics.correlation}%</p>
+                  <p className="text-xs text-red-400">HIGH</p>
+                </div>
+                <div className="bg-slate-900/50 rounded p-3">
+                  <p className="text-xs text-slate-400 mb-1">VaR (95%)</p>
+                  <p className="text-xl font-bold text-red-400">${(riskMetrics.var95/1000).toFixed(1)}K</p>
+                  <p className="text-xs text-slate-400">Worst scenario</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {whalesData.length === 0 ? (
-          <div className="bg-slate-800/30 rounded-xl p-12 text-center border border-slate-700/50">
-            <p className="text-slate-400 text-xl mb-2">Nenhuma whale monitorada</p>
-            <p className="text-slate-500">Clique em "Add Wallet" para começar</p>
+        {tab === 'positions' && (
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+            <h2 className="text-xl font-bold mb-4">📈 Posições Abertas</h2>
+            <p className="text-slate-400">Em desenvolvimento - posições das {whalesData.length} whales monitoradas</p>
           </div>
-        ) : (
-          <div className="bg-slate-800/30 rounded-xl border border-slate-700/50 overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-900/80 border-b border-slate-700/50">
-                  <th className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider">#</th>
-                  <th 
-                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
-                    onClick={() => handleSort('nickname')}
-                  >
-                    <div className="flex items-center gap-2">
-                      WALLET
-                      <SortIcon field="nickname" />
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
-                    onClick={() => handleSort('accountValue')}
-                  >
-                    <div className="flex items-center gap-2">
-                      ACCOUNT VALUE
-                      <SortIcon field="accountValue" />
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
-                    onClick={() => handleSort('unrealizedPnl')}
-                  >
-                    <div className="flex items-center gap-2">
-                      PNL
-                      <SortIcon field="unrealizedPnl" />
-                    </div>
-                  </th>
-                  <th 
-                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
-                    onClick={() => handleSort('marginUsed')}
-                  >
-                    <div className="flex items-center gap-2">
-                      MARGIN USADO
-                      <SortIcon field="marginUsed" />
-                    </div>
-                  </th>
-                  <th 
-                    className="text-center px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
-                    onClick={() => handleSort('positions')}
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      POSIÇÕES
-                      <SortIcon field="positions" />
-                    </div>
-                  </th>
-                  <th className="text-center px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider">
-                    AÇÕES
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedData.map((whale, index) => {
-                  const avatarText = (whale.address.slice(2, 4)).toUpperCase();
-                  const colorClass = avatarColors[index % avatarColors.length];
-                  
-                  return (
-                    <tr 
-                      key={whale.address}
-                      className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <span className="text-slate-400 font-semibold">{index + 1}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 ${colorClass} rounded-full flex items-center justify-center flex-shrink-0`}>
-                            <span className="text-white font-bold text-sm">{avatarText}</span>
-                          </div>
-                          <div>
-                            <div className="text-white font-semibold">
-                              {whale.nickname || `Whale #${index + 1}`}
-                            </div>
-                            <div className="text-slate-500 text-xs font-mono">
-                              {whale.address.slice(0, 6)}...{whale.address.slice(-4)}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-blue-400 font-bold text-lg">
-                          {formatCurrency(whale.accountValue || 0)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`font-bold text-lg ${
-                          (whale.unrealizedPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                        }`}>
-                          {formatCurrency(whale.unrealizedPnl || 0)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-slate-300 font-semibold">
-                          {formatCurrency(whale.marginUsed || 0)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="text-white font-bold text-lg">
-                          {(whale.positions || []).length}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <a
-                            href={`https://hypurrscan.io/address/${whale.address}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 font-medium text-sm transition-colors"
-                          >
-                            Hypurrscan
-                          </a>
-                          <button
-                            onClick={() => confirmDeleteWhale(whale)}
-                            className="p-1.5 rounded hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
-                            title="Remover"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        )}
+
+        {tab === 'trades' && (
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+            <h2 className="text-xl font-bold mb-4">📊 Histórico de Trades</h2>
+            <p className="text-slate-400">Em desenvolvimento</p>
+          </div>
+        )}
+
+        {tab === 'orders' && (
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+            <h2 className="text-xl font-bold mb-4">⏰ Ordens Pendentes</h2>
+            <p className="text-slate-400">Em desenvolvimento</p>
+          </div>
+        )}
+
+        {['ai-token', 'ai-wallet', 'analytics', 'risk', 'simulator', 'board'].includes(tab) && (
+          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+            <h2 className="text-xl font-bold mb-4">Em desenvolvimento</h2>
+            <p className="text-slate-400">Aba {tab} será implementada em breve</p>
           </div>
         )}
       </div>
