@@ -443,6 +443,7 @@ export default function HyperliquidPro() {
             <p className="text-slate-400">Esta seção estará disponível em breve</p>
           </div>
         )}
+        fix: mostrar todas whales + períodos
       </div>
     </div>
   );
