@@ -1,450 +1,565 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingUp, TrendingDown, Bell, Activity, Wallet, BarChart3, AlertCircle, Target, Zap, Brain, RefreshCw, ExternalLink } from 'lucide-react';
-import { fetchWhales, fetchMonitoringStatus } from '../api-service';
+import { 
+  Wallet, TrendingUp, TrendingDown, Activity, AlertTriangle, Clock, 
+  ChevronDown, ChevronUp, Plus, ExternalLink, RefreshCw, Wifi, 
+  WifiOff, Trash2, X, Check 
+} from 'lucide-react';
+
+const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
 
 export default function HyperliquidPro() {
-  const [activeTab, setActiveTab] = useState('command');
   const [whalesData, setWhalesData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const [monitoringStatus, setMonitoringStatus] = useState({ active: false });
+  const [selectedWhale, setSelectedWhale] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Estados para adicionar wallet
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newWalletAddress, setNewWalletAddress] = useState('');
+  const [newWalletNickname, setNewWalletNickname] = useState('');
+  const [isAddingWallet, setIsAddingWallet] = useState(false);
+  const [addError, setAddError] = useState('');
+  
+  // Estado para deletar wallet
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [walletToDelete, setWalletToDelete] = useState(null);
+  const [isDeletingWallet, setIsDeletingWallet] = useState(false);
 
-  // Carregar dados iniciais
+  // Buscar dados das whales
+  const fetchWhales = async () => {
+    try {
+      setError(null);
+      const response = await fetch(`${API_URL}/whales`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(60000) // 60 segundos timeout
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Validação robusta dos dados
+      if (Array.isArray(data)) {
+        setWhalesData(data);
+        setIsOnline(true);
+      } else if (data && Array.isArray(data.whales)) {
+        setWhalesData(data.whales);
+        setIsOnline(true);
+      } else {
+        console.warn('Formato de dados inesperado:', data);
+        setWhalesData([]);
+      }
+      
+      setLastUpdate(new Date());
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Erro ao buscar whales:', err);
+      setError(err.message);
+      setIsOnline(false);
+      setIsLoading(false);
+      setWhalesData([]);
+    }
+  };
+
+  // Adicionar nova whale
+  const handleAddWhale = async () => {
+    if (!newWalletAddress.trim()) {
+      setAddError('Endereço não pode estar vazio');
+      return;
+    }
+
+    // Validar formato do endereço Ethereum
+    if (!/^0x[a-fA-F0-9]{40}$/.test(newWalletAddress.trim())) {
+      setAddError('Endereço inválido. Use formato: 0x...');
+      return;
+    }
+
+    setIsAddingWallet(true);
+    setAddError('');
+
+    try {
+      const response = await fetch(`${API_URL}/whales`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          address: newWalletAddress.trim(),
+          nickname: newWalletNickname.trim() || undefined
+        }),
+        signal: AbortSignal.timeout(30000)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Erro ao adicionar whale');
+      }
+
+      const result = await response.json();
+      
+      // Atualizar lista
+      await fetchWhales();
+      
+      // Limpar e fechar modal
+      setNewWalletAddress('');
+      setNewWalletNickname('');
+      setShowAddModal(false);
+      
+    } catch (err) {
+      console.error('Erro ao adicionar whale:', err);
+      setAddError(err.message);
+    } finally {
+      setIsAddingWallet(false);
+    }
+  };
+
+  // Confirmar deleção
+  const confirmDeleteWhale = (whale) => {
+    setWalletToDelete(whale);
+    setShowDeleteModal(true);
+  };
+
+  // Deletar whale
+  const handleDeleteWhale = async () => {
+    if (!walletToDelete) return;
+
+    setIsDeletingWallet(true);
+
+    try {
+      const response = await fetch(`${API_URL}/whales/${walletToDelete.address}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(30000)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Erro ao remover whale');
+      }
+
+      // Atualizar lista
+      await fetchWhales();
+      
+      // Fechar modal
+      setShowDeleteModal(false);
+      setWalletToDelete(null);
+      
+    } catch (err) {
+      console.error('Erro ao deletar whale:', err);
+      setAddError(err.message);
+    } finally {
+      setIsDeletingWallet(false);
+    }
+  };
+
+  // Auto-refresh a cada 30 segundos
   useEffect(() => {
-    loadWhalesData();
-    loadMonitoringStatus();
-    
-    // Auto-refresh a cada 30 segundos
-    const interval = setInterval(() => {
-      loadWhalesData();
-      loadMonitoringStatus();
-    }, 30000);
-    
+    fetchWhales();
+    const interval = setInterval(fetchWhales, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadWhalesData = async () => {
-    try {
-      setLoading(true);
-      const data = await fetchWhales();
-      
-      // Garantir que data seja sempre um array
-      const whalesArray = Array.isArray(data) ? data : (data?.whales || []);
-      
-      console.log('=== DIAGNÓSTICO DE WHALES ===');
-      console.log('Resposta da API:', data);
-      console.log('Whales carregadas:', whalesArray.length);
-      console.log('Primeira whale:', whalesArray[0]);
-      console.log('Total de endereços únicos:', new Set(whalesArray.map(w => w.address)).size);
-      
-      setWhalesData(whalesArray);
-      setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Erro ao carregar whales:', error);
-      setWhalesData([]); // Garantir array vazio em caso de erro
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadMonitoringStatus = async () => {
-    try {
-      const status = await fetchMonitoringStatus();
-      setMonitoringStatus(status);
-    } catch (error) {
-      console.error('Erro ao carregar status:', error);
-    }
-  };
-
-  // Calcular métricas agregadas
-  const calculateMetrics = () => {
-    // Garantir que whalesData seja array válido
-    if (!Array.isArray(whalesData) || whalesData.length === 0) {
-      return {
-        totalPnl: 0,
-        totalVolume: 0,
-        avgWinRate: 0,
-        totalTrades: 0,
-        longs: 0,
-        shorts: 0
-      };
-    }
-
-    const totalPnl = whalesData.reduce((acc, w) => acc + (w.unrealized_pnl || 0), 0);
-    const totalVolume = whalesData.reduce((acc, w) => acc + (w.account_value || 0), 0);
-    const avgWinRate = whalesData.reduce((acc, w) => acc + (w.win_rate || 0), 0) / whalesData.length;
-    const totalTrades = whalesData.reduce((acc, w) => acc + (w.total_trades || 0), 0);
-    
-    let longs = 0;
-    let shorts = 0;
-    whalesData.forEach(w => {
-      if (Array.isArray(w.positions)) {
-        w.positions.forEach(p => {
-          if (p.size > 0) longs++;
-          else if (p.size < 0) shorts++;
-        });
-      }
-    });
-
-    return { totalPnl, totalVolume, avgWinRate, totalTrades, longs, shorts };
-  };
-
-  const metrics = calculateMetrics();
-
-  const formatMoney = (value) => {
-    if (!value) return '$0';
-    const absValue = Math.abs(value);
-    if (absValue >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-    if (absValue >= 1e3) return `$${(value / 1e3).toFixed(1)}K`;
-    return `$${value.toFixed(2)}`;
+  // Formatar valores
+  const formatCurrency = (value) => {
+    if (!value && value !== 0) return '$0.00';
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
   };
 
   const formatPercent = (value) => {
-    if (!value) return '0.0%';
-    return `${value.toFixed(1)}%`;
+    if (!value && value !== 0) return '0.00%';
+    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
 
-  const getStatusColor = () => {
-    const hasWhales = Array.isArray(whalesData) && whalesData.length > 0;
-    if (!hasWhales) return 'gray';
-    if (monitoringStatus.active) return 'green';
-    return 'yellow';
+  const formatTime = (date) => {
+    if (!date) return '--:--';
+    return new Intl.DateTimeFormat('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: 'America/Sao_Paulo'
+    }).format(new Date(date));
   };
 
-  const getStatusEmoji = () => {
-    const hasWhales = Array.isArray(whalesData) && whalesData.length > 0;
-    if (!hasWhales) return '⚪';
-    if (monitoringStatus.active) return '🟢';
-    return '🟡';
-  };
-
-  // Função para determinar qual explorador usar
-  const getExplorerForWallet = (address) => {
-    // Wallet específica que usa HyperDash
-    const hyperDashWallet = '0x369db618f431f296e0a9d7b4f8c94fe946d3e6cf';
-    
-    if (address.toLowerCase() === hyperDashWallet.toLowerCase()) {
-      return {
-        name: 'HyperDash',
-        url: `https://hyperdash.info/address/${address}`,
-        color: 'purple'
-      };
-    }
-    
-    return {
-      name: 'Hypurrscan',
-      url: `https://hypurrscan.io/address/${address}`,
-      color: 'blue'
-    };
-  };
-
-  const tabs = [
-    { id: 'command', icon: Activity, label: 'Command' },
-    { id: 'positions', icon: Wallet, label: 'Positions' },
-    { id: 'trades', icon: TrendingUp, label: 'Trades' },
-    { id: 'orders', icon: BarChart3, label: 'Orders' },
-    { id: 'ai_token', icon: Zap, label: 'AI Token' },
-    { id: 'ai_wallet', icon: Brain, label: 'AI Wallet' },
-    { id: 'analytics', icon: BarChart3, label: 'Analytics' },
-    { id: 'risk', icon: AlertCircle, label: 'Risk' },
-    { id: 'simulator', icon: Target, label: 'Simulator' },
-    { id: 'leaderboard', icon: Bell, label: 'Leaderboard' }
-  ];
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-blue-900 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-12 h-12 text-purple-300 animate-spin mx-auto mb-4" />
+          <p className="text-white text-xl">Carregando whales...</p>
+          <p className="text-purple-300 text-sm mt-2">Aguarde até 60 segundos</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-4">
-      <style>{`
-        ::-webkit-scrollbar {
-          width: 12px;
-        }
-        ::-webkit-scrollbar-track {
-          background: #1e293b;
-          border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: linear-gradient(180deg, #3b82f6 0%, #8b5cf6 100%);
-          border-radius: 10px;
-          border: 2px solid #1e293b;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(180deg, #2563eb 0%, #7c3aed 100%);
-        }
-      `}</style>
-
-      <div className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-[1900px] mx-auto px-4 py-3">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Activity className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold">Hyperliquid Pro Tracker</h1>
-                <p className="text-xs text-slate-400">Institutional Grade - Live from Hypurrscan & HyperDash</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <a href="https://hypurrscan.io" target="_blank" rel="noopener noreferrer" 
-                className="flex items-center gap-1 px-2 py-1 bg-slate-800 rounded text-xs hover:bg-slate-700">
-                <ExternalLink className="w-3 h-3" />Hypurrscan
-              </a>
-              <a href="https://hyperdash.info" target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 px-2 py-1 bg-slate-800 rounded text-xs hover:bg-slate-700">
-                <ExternalLink className="w-3 h-3" />HyperDash
-              </a>
-              
-              <div className={`flex items-center gap-2 bg-${getStatusColor()}-500/10 border border-${getStatusColor()}-500/30 px-3 py-1 rounded text-xs`}>
-                <div className={`w-2 h-2 bg-${getStatusColor()}-400 rounded-full animate-pulse`}></div>
-                <span className={`text-${getStatusColor()}-400 font-medium flex items-center gap-1`}>
-                  {getStatusEmoji()} Live • {Array.isArray(whalesData) ? whalesData.length : 0}
-                </span>
-              </div>
-
-              <button 
-                onClick={loadWhalesData}
-                disabled={loading}
-                className="p-1.5 hover:bg-slate-800 rounded"
-                title="Atualizar dados">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-
-              <button className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded hover:from-blue-500 hover:to-purple-500 text-sm font-medium">
-                + Add Wallet
-              </button>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-blue-900 p-6">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold text-white mb-2">
+            🐋 Hyperliquid Whale Tracker
+          </h1>
+          <p className="text-purple-200">Monitoramento em tempo real</p>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          {/* Status Online/Offline */}
+          <div className="flex items-center gap-2 bg-slate-800/50 px-4 py-2 rounded-lg">
+            {isOnline ? (
+              <>
+                <Wifi className="w-5 h-5 text-green-400 animate-pulse" />
+                <span className="text-green-400 font-semibold">ONLINE</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-5 h-5 text-red-400" />
+                <span className="text-red-400 font-semibold">OFFLINE</span>
+              </>
+            )}
           </div>
+          
+          {/* Última atualização */}
+          {lastUpdate && (
+            <div className="flex items-center gap-2 bg-slate-800/50 px-4 py-2 rounded-lg">
+              <Clock className="w-5 h-5 text-purple-300" />
+              <span className="text-white text-sm">{formatTime(lastUpdate)}</span>
+            </div>
+          )}
+          
+          {/* Botão Refresh */}
+          <button
+            onClick={fetchWhales}
+            disabled={isLoading}
+            className="bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 px-4 py-2 rounded-lg flex items-center gap-2 text-white transition-colors"
+          >
+            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
 
-          <div className="flex gap-1 overflow-x-auto pb-2">
-            {tabs.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                      : 'bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}>
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+          {/* Botão Add Wallet */}
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 px-6 py-3 rounded-lg flex items-center gap-2 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            Adicionar Wallet
+          </button>
         </div>
       </div>
 
-      <div className="max-w-[1900px] mx-auto mt-4">
-        {activeTab === 'command' && (
-          <div className="space-y-4">
-            {/* Métricas Principais */}
-            <div className="grid grid-cols-4 gap-4">
-              <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur rounded-xl p-4 border border-slate-700/50">
-                <div className="text-xs text-slate-400 mb-1">TOTAL PNL</div>
-                <div className={`text-2xl font-bold ${metrics.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {formatMoney(metrics.totalPnl)}
+      {/* Erro */}
+      {error && (
+        <div className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4 flex items-center gap-3">
+          <AlertTriangle className="w-6 h-6 text-red-400" />
+          <div>
+            <p className="text-red-400 font-semibold">Erro ao carregar dados</p>
+            <p className="text-red-300 text-sm">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Lista de Whales */}
+      {whalesData.length === 0 ? (
+        <div className="bg-slate-800/50 rounded-xl p-12 text-center">
+          <Wallet className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <p className="text-white text-xl mb-2">Nenhuma whale monitorada</p>
+          <p className="text-slate-400">Adicione uma wallet para começar</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {whalesData.map((whale) => (
+            <div
+              key={whale.address}
+              className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow p-6"
+            >
+              {/* Header do Card */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Wallet className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-lg font-bold text-slate-800">
+                      {whale.nickname || `Whale ${whale.address.slice(0, 6)}...${whale.address.slice(-4)}`}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 font-mono break-all">
+                    {whale.address}
+                  </p>
                 </div>
-                <div className={`text-xs ${metrics.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'} flex items-center gap-1 mt-1`}>
-                  {metrics.totalPnl >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  +34.7%
+
+                {/* Botões de ação */}
+                <div className="flex items-center gap-2 ml-2">
+                  {/* Link Hypurrscan */}
+                  <a
+                    href={`https://hypurrscan.io/address/${whale.address}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 p-2 rounded transition-colors"
+                    title="Ver no Hypurrscan"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+
+                  {/* Botão Deletar */}
+                  <button
+                    onClick={() => confirmDeleteWhale(whale)}
+                    className="text-red-500 hover:text-red-600 hover:bg-red-50 p-2 rounded transition-colors"
+                    title="Remover whale"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur rounded-xl p-4 border border-slate-700/50">
-                <div className="text-xs text-slate-400 mb-1">OPEN POS</div>
-                <div className="text-2xl font-bold text-blue-400">{metrics.longs + metrics.shorts}</div>
-                <div className="text-xs text-slate-400 mt-1">{formatMoney(metrics.totalVolume)}</div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur rounded-xl p-4 border border-slate-700/50">
-                <div className="text-xs text-slate-400 mb-1">WIN RATE</div>
-                <div className="text-2xl font-bold text-purple-400">{formatPercent(metrics.avgWinRate)}</div>
-                <div className="text-xs text-green-400 flex items-center gap-1 mt-1">
-                  +2.1%
+              {/* Métricas */}
+              <div className="space-y-3">
+                {/* Account Value */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600">Valor da Conta</span>
+                  <span className="text-lg font-bold text-slate-800">
+                    {formatCurrency(whale.accountValue)}
+                  </span>
                 </div>
-              </div>
 
-              <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur rounded-xl p-4 border border-slate-700/50">
-                <div className="text-xs text-slate-400 mb-1">SHARPE</div>
-                <div className="text-2xl font-bold text-yellow-400">2.84</div>
-                <div className="text-xs text-slate-400 mt-1">Excellent</div>
+                {/* Margin Used */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600">Margem Usada</span>
+                  <span className="text-base font-semibold text-slate-700">
+                    {formatCurrency(whale.marginUsed)}
+                  </span>
+                </div>
+
+                {/* Unrealized PnL */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600">PnL Não Realizado</span>
+                  <span className={`text-base font-semibold ${
+                    (whale.unrealizedPnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {formatCurrency(whale.unrealizedPnl)}
+                  </span>
+                </div>
+
+                {/* Liquidation Risk */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-600">Risco de Liquidação</span>
+                  <span className={`text-base font-bold px-2 py-1 rounded ${
+                    (whale.liquidationRisk || 0) < 5 ? 'bg-green-100 text-green-700' :
+                    (whale.liquidationRisk || 0) < 15 ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {formatPercent(whale.liquidationRisk || 0)}
+                  </span>
+                </div>
+
+                {/* Posições Ativas */}
+                <div className="mt-4 pt-3 border-t border-slate-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm font-semibold text-slate-700">
+                      Posições Ativas: {whale.positions?.length || 0}
+                    </span>
+                  </div>
+                  
+                  {whale.positions && whale.positions.length > 0 && (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {whale.positions.map((pos, idx) => (
+                        <div key={idx} className="text-xs bg-slate-50 rounded p-2 flex justify-between">
+                          <span className="font-semibold text-slate-700">{pos.coin || pos.token}</span>
+                          <span className={pos.szi > 0 ? 'text-green-600' : 'text-red-600'}>
+                            {pos.szi > 0 ? 'LONG' : 'SHORT'} {Math.abs(pos.szi || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+          ))}
+        </div>
+      )}
 
-            {/* Métricas LONG vs SHORT - Todos os períodos */}
-            <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur rounded-xl p-6 border border-slate-700/50">
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
-                <h2 className="text-lg font-bold">📊 Métricas LONG vs SHORT</h2>
-              </div>
-              
-              {/* Grade com 3 períodos */}
-              <div className="grid grid-cols-3 gap-4">
-                {/* 1D */}
-                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/30">
-                  <div className="text-center text-sm font-bold text-slate-300 mb-3">1D</div>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-xs text-slate-400">LONGs</div>
-                      <div className="text-xl font-bold text-green-400">{Math.floor(metrics.longs * 0.08)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">SHORTs</div>
-                      <div className="text-xl font-bold text-orange-400">{Math.floor(metrics.shorts * 0.08)}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 7D */}
-                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/30">
-                  <div className="text-center text-sm font-bold text-slate-300 mb-3">7D</div>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-xs text-slate-400">LONGs</div>
-                      <div className="text-xl font-bold text-green-400">{Math.floor(metrics.longs * 0.35)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">SHORTs</div>
-                      <div className="text-xl font-bold text-orange-400">{Math.floor(metrics.shorts * 0.35)}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 30D */}
-                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/30">
-                  <div className="text-center text-sm font-bold text-slate-300 mb-3">30D</div>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-xs text-slate-400">LONGs</div>
-                      <div className="text-xl font-bold text-green-400">{metrics.longs}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">SHORTs</div>
-                      <div className="text-xl font-bold text-orange-400">{metrics.shorts}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Win Rates */}
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/30">
-                  <div className="text-xs text-slate-400 mb-1">LONGs Win Rate</div>
-                  <div className="text-2xl font-bold text-green-400">84.2%</div>
-                  <div className="text-xs text-green-500 mt-1">EXCELENTE</div>
-                </div>
-                <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/30">
-                  <div className="text-xs text-slate-400 mb-1">SHORTs Win Rate</div>
-                  <div className="text-2xl font-bold text-orange-400">71.9%</div>
-                  <div className="text-xs text-orange-500 mt-1">BOM</div>
-                </div>
-              </div>
+      {/* Modal Adicionar Wallet */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <Plus className="w-6 h-6 text-green-600" />
+                Adicionar Wallet
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setAddError('');
+                  setNewWalletAddress('');
+                  setNewWalletNickname('');
+                }}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
-            {/* Lista de Whales */}
-            <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur rounded-xl border border-slate-700/50 overflow-hidden">
-              <div className="p-4 border-b border-slate-700">
-                <h2 className="text-lg font-bold">🐋 Whales Monitoradas</h2>
+            <div className="space-y-4">
+              {/* Endereço */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Endereço da Wallet *
+                </label>
+                <input
+                  type="text"
+                  value={newWalletAddress}
+                  onChange={(e) => setNewWalletAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:border-purple-600 focus:outline-none transition-colors font-mono text-sm"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Exemplo: 0x8c5865689EABe45645fa034e53d0c9995DCcb9c9
+                </p>
               </div>
-              
-              {loading && (!Array.isArray(whalesData) || whalesData.length === 0) ? (
-                <div className="p-8 text-center text-slate-400">
-                  <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
-                  Carregando dados...
-                </div>
-              ) : !Array.isArray(whalesData) || whalesData.length === 0 ? (
-                <div className="p-8 text-center text-slate-400">
-                  Nenhuma whale monitorada ainda
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-900/50">
-                      <tr className="text-xs text-slate-400">
-                        <th className="px-4 py-3 text-left">#</th>
-                        <th className="px-4 py-3 text-left">WALLET</th>
-                        <th className="px-4 py-3 text-right">ACCOUNT VALUE</th>
-                        <th className="px-4 py-3 text-right">PNL</th>
-                        <th className="px-4 py-3 text-right">MARGIN USADO</th>
-                        <th className="px-4 py-3 text-center">POSIÇÕES</th>
-                        <th className="px-4 py-3 text-center">AÇÕES</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.isArray(whalesData) && whalesData.map((whale, idx) => {
-                        console.log(`Renderizando whale ${idx + 1}:`, whale.address);
-                        return (
-                        <tr key={whale.address || idx} className="border-t border-slate-800 hover:bg-slate-800/30">
-                          <td className="px-4 py-3 text-sm">{idx + 1}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-xs font-bold">
-                                {whale.address.slice(2, 4).toUpperCase()}
-                              </div>
-                              <div>
-                                <div className="text-sm font-medium">Whale #{idx + 1}</div>
-                                <div className="text-xs text-slate-400">{whale.address.slice(0, 6)}...{whale.address.slice(-4)}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="text-sm font-bold text-blue-400">{formatMoney(whale.account_value)}</div>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className={`text-sm font-bold ${whale.unrealized_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {formatMoney(whale.unrealized_pnl)}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="text-sm">{formatMoney(whale.total_margin_used)}</div>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="text-sm font-medium">{whale.positions && Array.isArray(whale.positions) ? whale.positions.length : 0}</div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-center gap-2">
-                              {(() => {
-                                const explorer = getExplorerForWallet(whale.address);
-                                return (
-                                  <a 
-                                    href={explorer.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`px-2 py-1 bg-${explorer.color}-500/10 text-${explorer.color}-400 rounded text-xs hover:bg-${explorer.color}-500/20`}>
-                                    {explorer.name}
-                                  </a>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                        </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+
+              {/* Apelido */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Apelido (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={newWalletNickname}
+                  onChange={(e) => setNewWalletNickname(e.target.value)}
+                  placeholder="Ex: Sigma Whale"
+                  className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:border-purple-600 focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Erro */}
+              {addError && (
+                <div className="bg-red-50 border border-red-300 rounded-lg p-3 flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">{addError}</p>
                 </div>
               )}
+
+              {/* Botões */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setAddError('');
+                    setNewWalletAddress('');
+                    setNewWalletNickname('');
+                  }}
+                  disabled={isAddingWallet}
+                  className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddWhale}
+                  disabled={isAddingWallet || !newWalletAddress.trim()}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 rounded-lg text-white font-semibold hover:from-green-700 hover:to-green-800 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isAddingWallet ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Adicionando...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      Adicionar
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Deleção */}
+      {showDeleteModal && walletToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+                Confirmar Remoção
+              </h2>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setWalletToDelete(null);
+                }}
+                disabled={isDeletingWallet}
+                className="text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
-            {lastUpdate && (
-              <div className="text-xs text-slate-500 text-center">
-                Última atualização: {lastUpdate.toLocaleString('pt-BR')}
+            <div className="space-y-4">
+              <p className="text-slate-600">
+                Tem certeza que deseja remover esta wallet do monitoramento?
+              </p>
+              
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <p className="text-sm font-semibold text-slate-800 mb-1">
+                  {walletToDelete.nickname || 'Whale'}
+                </p>
+                <p className="text-xs text-slate-500 font-mono break-all">
+                  {walletToDelete.address}
+                </p>
               </div>
-            )}
-          </div>
-        )}
 
-        {activeTab !== 'command' && (
-          <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur rounded-xl p-12 border border-slate-700/50 text-center">
-            <div className="text-6xl mb-4">🚧</div>
-            <h2 className="text-2xl font-bold mb-2">Em Desenvolvimento</h2>
-            <p className="text-slate-400">Esta seção estará disponível em breve</p>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setWalletToDelete(null);
+                  }}
+                  disabled={isDeletingWallet}
+                  className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteWhale}
+                  disabled={isDeletingWallet}
+                  className="flex-1 px-4 py-3 bg-red-600 rounded-lg text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeletingWallet ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Removendo...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-5 h-5" />
+                      Remover
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-        fix: mostrar todas whales + períodos
-      </div>
+        </div>
+      )}
     </div>
   );
 }
