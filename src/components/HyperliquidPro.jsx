@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Wallet, Activity, Clock, Plus, ExternalLink, RefreshCw, 
-  Trash2, X, Check, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown
+  Activity, Clock, Plus, ExternalLink, RefreshCw, 
+  Trash2, X, Check, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown,
+  BarChart3, TrendingUp, Shield, PlayCircle, Bell, Target, Brain, Award
 } from 'lucide-react';
 
 const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
 
 export default function HyperliquidPro() {
+  const [tab, setTab] = useState('command');
   const [whalesData, setWhalesData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [error, setError] = useState(null);
-  const [liveStatus, setLiveStatus] = useState('connecting');
   
   // Estados para adicionar wallet
   const [showAddModal, setShowAddModal] = useState(false);
@@ -29,11 +30,17 @@ export default function HyperliquidPro() {
   const [sortField, setSortField] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
 
+  // Cores para os círculos das whales
+  const avatarColors = [
+    'bg-purple-600', 'bg-blue-600', 'bg-pink-600', 'bg-indigo-600',
+    'bg-violet-600', 'bg-fuchsia-600', 'bg-cyan-600', 'bg-sky-600',
+    'bg-rose-600', 'bg-purple-500', 'bg-blue-500'
+  ];
+
   // Buscar dados das whales
   const fetchWhales = async () => {
     try {
       setError(null);
-      setLiveStatus('connecting');
       
       const response = await fetch(`${API_URL}/whales`, {
         method: 'GET',
@@ -51,14 +58,10 @@ export default function HyperliquidPro() {
       
       if (Array.isArray(data)) {
         setWhalesData(data);
-        setLiveStatus('online');
       } else if (data && Array.isArray(data.whales)) {
         setWhalesData(data.whales);
-        setLiveStatus('online');
       } else {
-        console.warn('Formato de dados inesperado:', data);
         setWhalesData([]);
-        setLiveStatus('warning');
       }
       
       setLastUpdate(new Date());
@@ -66,7 +69,6 @@ export default function HyperliquidPro() {
     } catch (err) {
       console.error('Erro ao buscar whales:', err);
       setError(err.message);
-      setLiveStatus('offline');
       setIsLoading(false);
       setWhalesData([]);
     }
@@ -214,32 +216,22 @@ export default function HyperliquidPro() {
     }).format(value);
   };
 
-  const formatTime = (date) => {
-    if (!date) return '--:--';
-    return new Intl.DateTimeFormat('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZone: 'America/Sao_Paulo'
-    }).format(new Date(date));
-  };
-
   const SortIcon = ({ field }) => {
     if (sortField !== field) {
-      return <ArrowUpDown className="w-4 h-4 text-slate-400" />;
+      return <ArrowUpDown className="w-3 h-3 text-slate-500" />;
     }
     return sortDirection === 'asc' 
-      ? <ArrowUp className="w-4 h-4 text-purple-400" />
-      : <ArrowDown className="w-4 h-4 text-purple-400" />;
+      ? <ArrowUp className="w-3 h-3 text-blue-400" />
+      : <ArrowDown className="w-3 h-3 text-blue-400" />;
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-purple-400 animate-spin mx-auto mb-4" />
+          <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
           <p className="text-white text-xl">Carregando whales...</p>
-          <p className="text-purple-300 text-sm mt-2">Aguarde até 60 segundos</p>
+          <p className="text-slate-400 text-sm mt-2">Aguarde até 60 segundos</p>
         </div>
       </div>
     );
@@ -248,66 +240,55 @@ export default function HyperliquidPro() {
   const sortedData = getSortedData();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
-      <div className="bg-slate-900/50 backdrop-blur border-b border-purple-500/20">
-        <div className="max-w-[1600px] mx-auto px-6 py-4">
+      <div className="border-b border-slate-700/50 bg-slate-900/50 backdrop-blur">
+        <div className="max-w-[1800px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-purple-600 p-3 rounded-xl">
-                <Wallet className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                <Activity className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Hyperliquid Pro Tracker</h1>
-                <p className="text-purple-300 text-sm">Institutional Grade - Live from Hypurrscan & HyperDash</p>
+                <h1 className="text-white text-2xl font-bold">Hyperliquid Pro Tracker</h1>
+                <p className="text-slate-400 text-sm">Institutional Grade - Live from Hypurrscan & HyperDash</p>
               </div>
             </div>
             
-            <div className="flex items-center gap-4">
-              {/* Status Live */}
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-                liveStatus === 'online' ? 'bg-green-500/20' :
-                liveStatus === 'connecting' ? 'bg-yellow-500/20' :
-                'bg-red-500/20'
-              }`}>
-                <div className={`w-2 h-2 rounded-full ${
-                  liveStatus === 'online' ? 'bg-green-400 animate-pulse' :
-                  liveStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
-                  'bg-red-400'
-                }`}></div>
-                <span className={`font-semibold text-sm ${
-                  liveStatus === 'online' ? 'text-green-400' :
-                  liveStatus === 'connecting' ? 'text-yellow-400' :
-                  'text-red-400'
-                }`}>
-                  {liveStatus === 'online' ? 'Live' :
-                   liveStatus === 'connecting' ? 'Conectando...' :
-                   'Offline'}
-                </span>
-                {whalesData.length > 0 && (
-                  <span className="text-white">• {whalesData.length}</span>
-                )}
+            <div className="flex items-center gap-3">
+              <a
+                href="https://hypurrscan.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 hover:border-slate-500 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Hypurrscan
+              </a>
+              <a
+                href="https://hyperdash.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 text-sm text-slate-300 hover:text-white border border-slate-600 hover:border-slate-500 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                HyperDash
+              </a>
+              <div className="px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-green-400 font-semibold text-sm">Live</span>
+                <span className="text-white">• {whalesData.length}</span>
               </div>
-
-              {lastUpdate && (
-                <div className="flex items-center gap-2 text-purple-300 text-sm">
-                  <Clock className="w-4 h-4" />
-                  {formatTime(lastUpdate)}
-                </div>
-              )}
-
               <button
                 onClick={fetchWhales}
                 disabled={isLoading}
-                className="p-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 transition-colors"
-                title="Atualizar"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
               >
                 <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
-
               <button
                 onClick={() => setShowAddModal(true)}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-6 py-2.5 rounded-lg flex items-center gap-2 text-white font-semibold shadow-lg transition-all"
+                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-lg flex items-center gap-2 shadow-lg transition-all"
               >
                 <Plus className="w-5 h-5" />
                 Add Wallet
@@ -318,30 +299,42 @@ export default function HyperliquidPro() {
       </div>
 
       {/* Abas */}
-      <div className="bg-slate-900/30 backdrop-blur border-b border-purple-500/10">
-        <div className="max-w-[1600px] mx-auto px-6">
+      <div className="border-b border-slate-700/50 bg-slate-900/30">
+        <div className="max-w-[1800px] mx-auto px-6">
           <div className="flex gap-1">
-            <button className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-t-lg flex items-center gap-2">
-              <Activity className="w-4 h-4" />
-              Command
-            </button>
-            <button className="px-6 py-3 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-t-lg transition-colors">
-              Positions
-            </button>
-            <button className="px-6 py-3 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-t-lg transition-colors">
-              Trades
-            </button>
-            <button className="px-6 py-3 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-t-lg transition-colors">
-              Analytics
-            </button>
+            {[
+              { id: 'command', icon: Activity, label: 'Command' },
+              { id: 'positions', icon: BarChart3, label: 'Positions' },
+              { id: 'trades', icon: TrendingUp, label: 'Trades' },
+              { id: 'orders', icon: BarChart3, label: 'Orders' },
+              { id: 'ai-token', icon: Brain, label: 'AI Token' },
+              { id: 'ai-wallet', icon: Target, label: 'AI Wallet' },
+              { id: 'analytics', icon: BarChart3, label: 'Analytics' },
+              { id: 'risk', icon: Shield, label: 'Risk' },
+              { id: 'simulator', icon: PlayCircle, label: 'Simulator' },
+              { id: 'leaderboard', icon: Award, label: 'Leaderboard' }
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-6 py-3 font-semibold rounded-t-lg flex items-center gap-2 transition-colors ${
+                  tab === t.id
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <t.icon className="w-4 h-4" />
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Conteúdo Principal */}
-      <div className="max-w-[1600px] mx-auto px-6 py-6">
+      {/* Conteúdo */}
+      <div className="max-w-[1800px] mx-auto px-6 py-6">
         {error && (
-          <div className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4 flex items-center gap-3">
+          <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-red-400" />
             <div>
               <p className="text-red-400 font-semibold">Erro ao carregar dados</p>
@@ -350,21 +343,19 @@ export default function HyperliquidPro() {
           </div>
         )}
 
-        {/* Tabela */}
         {whalesData.length === 0 ? (
-          <div className="bg-slate-800/50 rounded-xl p-12 text-center border border-purple-500/20">
-            <Wallet className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-            <p className="text-white text-xl mb-2">Nenhuma whale monitorada</p>
-            <p className="text-slate-400">Clique em "Add Wallet" para começar</p>
+          <div className="bg-slate-800/30 rounded-xl p-12 text-center border border-slate-700/50">
+            <p className="text-slate-400 text-xl mb-2">Nenhuma whale monitorada</p>
+            <p className="text-slate-500">Clique em "Add Wallet" para começar</p>
           </div>
         ) : (
-          <div className="bg-slate-800/30 rounded-xl border border-purple-500/20 overflow-hidden">
+          <div className="bg-slate-800/30 rounded-xl border border-slate-700/50 overflow-hidden">
             <table className="w-full">
               <thead>
-                <tr className="bg-slate-900/50 border-b border-purple-500/20">
-                  <th className="text-left px-6 py-4 text-slate-400 font-semibold text-sm w-12">#</th>
+                <tr className="bg-slate-900/80 border-b border-slate-700/50">
+                  <th className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider">#</th>
                   <th 
-                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm cursor-pointer hover:text-purple-400 transition-colors"
+                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
                     onClick={() => handleSort('nickname')}
                   >
                     <div className="flex items-center gap-2">
@@ -373,7 +364,7 @@ export default function HyperliquidPro() {
                     </div>
                   </th>
                   <th 
-                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm cursor-pointer hover:text-purple-400 transition-colors"
+                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
                     onClick={() => handleSort('accountValue')}
                   >
                     <div className="flex items-center gap-2">
@@ -382,7 +373,7 @@ export default function HyperliquidPro() {
                     </div>
                   </th>
                   <th 
-                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm cursor-pointer hover:text-purple-400 transition-colors"
+                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
                     onClick={() => handleSort('unrealizedPnl')}
                   >
                     <div className="flex items-center gap-2">
@@ -391,7 +382,7 @@ export default function HyperliquidPro() {
                     </div>
                   </th>
                   <th 
-                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm cursor-pointer hover:text-purple-400 transition-colors"
+                    className="text-left px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
                     onClick={() => handleSort('marginUsed')}
                   >
                     <div className="flex items-center gap-2">
@@ -400,7 +391,7 @@ export default function HyperliquidPro() {
                     </div>
                   </th>
                   <th 
-                    className="text-center px-6 py-4 text-slate-400 font-semibold text-sm cursor-pointer hover:text-purple-400 transition-colors"
+                    className="text-center px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider cursor-pointer hover:text-slate-300"
                     onClick={() => handleSort('positions')}
                   >
                     <div className="flex items-center justify-center gap-2">
@@ -408,78 +399,83 @@ export default function HyperliquidPro() {
                       <SortIcon field="positions" />
                     </div>
                   </th>
-                  <th className="text-center px-6 py-4 text-slate-400 font-semibold text-sm">
+                  <th className="text-center px-6 py-4 text-slate-400 font-semibold text-sm uppercase tracking-wider">
                     AÇÕES
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedData.map((whale, index) => (
-                  <tr 
-                    key={whale.address}
-                    className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">
-                          {String(index + 1).padStart(2, '0')}
+                {sortedData.map((whale, index) => {
+                  const avatarText = (whale.address.slice(2, 4)).toUpperCase();
+                  const colorClass = avatarColors[index % avatarColors.length];
+                  
+                  return (
+                    <tr 
+                      key={whale.address}
+                      className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors"
+                    >
+                      <td className="px-6 py-4">
+                        <span className="text-slate-400 font-semibold">{index + 1}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 ${colorClass} rounded-full flex items-center justify-center flex-shrink-0`}>
+                            <span className="text-white font-bold text-sm">{avatarText}</span>
+                          </div>
+                          <div>
+                            <div className="text-white font-semibold">
+                              {whale.nickname || `Whale #${index + 1}`}
+                            </div>
+                            <div className="text-slate-500 text-xs font-mono">
+                              {whale.address.slice(0, 6)}...{whale.address.slice(-4)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-blue-400 font-bold text-lg">
+                          {formatCurrency(whale.accountValue || 0)}
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <div className="text-white font-semibold mb-1">
-                          {whale.nickname || `Whale #${index + 1}`}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`font-bold text-lg ${
+                          (whale.unrealizedPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {formatCurrency(whale.unrealizedPnl || 0)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-slate-300 font-semibold">
+                          {formatCurrency(whale.marginUsed || 0)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="text-white font-bold text-lg">
+                          {(whale.positions || []).length}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <a
+                            href={`https://hypurrscan.io/address/${whale.address}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 font-medium text-sm transition-colors"
+                          >
+                            Hypurrscan
+                          </a>
+                          <button
+                            onClick={() => confirmDeleteWhale(whale)}
+                            className="p-1.5 rounded hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                            title="Remover"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <div className="text-slate-400 text-xs font-mono">
-                          {whale.address.slice(0, 6)}...{whale.address.slice(-4)}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-blue-400 font-bold text-lg">
-                        {formatCurrency(whale.accountValue || 0)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`font-bold text-lg ${
-                        (whale.unrealizedPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {formatCurrency(whale.unrealizedPnl || 0)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-purple-400 font-semibold">
-                        {formatCurrency(whale.marginUsed || 0)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-white font-bold text-lg">
-                        {(whale.positions || []).length}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <a
-                          href={`https://hypurrscan.io/address/${whale.address}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 transition-colors"
-                          title="Hypurrscan"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                        <button
-                          onClick={() => confirmDeleteWhale(whale)}
-                          className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
-                          title="Remover"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -489,10 +485,10 @@ export default function HyperliquidPro() {
       {/* Modal Adicionar Wallet */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-purple-500/30">
+          <div className="bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-700">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                <Plus className="w-6 h-6 text-purple-400" />
+                <Plus className="w-6 h-6 text-blue-400" />
                 Adicionar Wallet
               </h2>
               <button
@@ -518,11 +514,8 @@ export default function HyperliquidPro() {
                   value={newWalletAddress}
                   onChange={(e) => setNewWalletAddress(e.target.value)}
                   placeholder="0x..."
-                  className="w-full px-4 py-3 bg-slate-900 border-2 border-slate-700 rounded-lg focus:border-purple-500 focus:outline-none transition-colors text-white font-mono text-sm"
+                  className="w-full px-4 py-3 bg-slate-900 border-2 border-slate-700 rounded-lg focus:border-blue-500 focus:outline-none transition-colors text-white font-mono text-sm"
                 />
-                <p className="text-xs text-slate-400 mt-1">
-                  Exemplo: 0x8c5865689EABe45645fa034e53d0c9995DCcb9c9
-                </p>
               </div>
 
               <div>
@@ -534,7 +527,7 @@ export default function HyperliquidPro() {
                   value={newWalletNickname}
                   onChange={(e) => setNewWalletNickname(e.target.value)}
                   placeholder="Ex: Sigma Whale"
-                  className="w-full px-4 py-3 bg-slate-900 border-2 border-slate-700 rounded-lg focus:border-purple-500 focus:outline-none transition-colors text-white"
+                  className="w-full px-4 py-3 bg-slate-900 border-2 border-slate-700 rounded-lg focus:border-blue-500 focus:outline-none transition-colors text-white"
                 />
               </div>
 
@@ -561,7 +554,7 @@ export default function HyperliquidPro() {
                 <button
                   onClick={handleAddWhale}
                   disabled={isAddingWallet || !newWalletAddress.trim()}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg text-white font-semibold hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-white font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isAddingWallet ? (
                     <>
