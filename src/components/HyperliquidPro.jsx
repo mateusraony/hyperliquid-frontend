@@ -108,6 +108,7 @@ export default function HyperliquidPro() {
         console.log('  accountValue:', whale.accountValue, typeof whale.accountValue);
         console.log('  unrealizedPnl:', whale.unrealizedPnl, typeof whale.unrealizedPnl);
         console.log('  marginUsed:', whale.marginUsed, typeof whale.marginUsed);
+        console.log('  total_position_value:', whale.total_position_value, typeof whale.total_position_value);
         console.log('  Positions:', whale.positions ? whale.positions.length : 0);
         console.log('  Campos disponíveis:', Object.keys(whale));
       });
@@ -353,14 +354,23 @@ export default function HyperliquidPro() {
     return 'red';
   };
 
-  // Calcular métricas totais REAIS das whales
+  // Calcular métricas totais REAIS das whales - CORRIGIDO
   const totalMetrics = whalesData.reduce((acc, whale) => {
-    const accountValue = whale.accountValue || whale.account_value || 0;
-    const pnl = whale.unrealizedPnl || whale.unrealized_pnl || 0;
     const positions = whale.positions || whale.active_positions || [];
     
-    acc.totalValue += accountValue;
-    acc.totalPnL += pnl;
+    // CORREÇÃO: Adicionar suporte para total_position_value
+    let accountValue = whale.accountValue || whale.account_value || whale.total_position_value || 0;
+    
+    // CORREÇÃO: Calcular PnL somando das posições se não vier direto
+    let pnl = whale.unrealizedPnl || whale.unrealized_pnl || 0;
+    if (!pnl && positions.length > 0) {
+      pnl = positions.reduce((sum, pos) => {
+        return sum + (parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0));
+      }, 0);
+    }
+    
+    acc.totalValue += parseFloat(accountValue) || 0;
+    acc.totalPnL += parseFloat(pnl) || 0;
     acc.totalPositions += positions.length;
     return acc;
   }, { totalValue: 0, totalPnL: 0, totalPositions: 0 });
@@ -700,11 +710,30 @@ export default function HyperliquidPro() {
                     </thead>
                     <tbody>
                       {sortedData.map((whale, idx) => {
-                        // Suporte para múltiplos formatos de campo
-                        const accountValue = whale.accountValue || whale.account_value || 0;
-                        const pnl = whale.unrealizedPnl || whale.unrealized_pnl || 0;
-                        const margin = whale.marginUsed || whale.margin_used || whale.total_margin_used || 0;
+                        // Suporte para múltiplos formatos de campo - CORRIGIDO
                         const positions = whale.positions || whale.active_positions || [];
+                        
+                        // CORREÇÃO: Adicionar total_position_value
+                        let accountValue = whale.accountValue || whale.account_value || whale.total_position_value || 0;
+                        
+                        // CORREÇÃO: Calcular PnL das posições
+                        let pnl = whale.unrealizedPnl || whale.unrealized_pnl || 0;
+                        if (!pnl && positions.length > 0) {
+                          pnl = positions.reduce((sum, pos) => {
+                            return sum + (parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0));
+                          }, 0);
+                        }
+                        
+                        // CORREÇÃO: Calcular margem das posições
+                        let margin = whale.marginUsed || whale.margin_used || whale.total_margin_used || 0;
+                        if (!margin && positions.length > 0) {
+                          margin = positions.reduce((sum, pos) => {
+                            const posValue = parseFloat(pos.positionValue || pos.position_value || 0);
+                            const leverage = pos.leverage?.value || pos.leverage || 1;
+                            return sum + (posValue / leverage);
+                          }, 0);
+                        }
+                        
                         const nickname = whale.nickname || `Whale #${idx + 1}`;
                         
                         return (
