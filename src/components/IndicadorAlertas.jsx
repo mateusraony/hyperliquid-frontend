@@ -4,8 +4,8 @@ import { Radio } from 'lucide-react';
 const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
 
 /**
- * INDICADOR DE ALERTAS TELEGRAM - VERSÃO MELHORADA
- * Badge sutil mas VISÍVEL mostrando status dos alertas
+ * INDICADOR DE ALERTAS TELEGRAM - COMPACTO
+ * Badge sutil mostrando status dos alertas
  */
 export function IndicadorAlertas() {
   const [telegramStatus, setTelegramStatus] = useState(null);
@@ -53,7 +53,7 @@ export function IndicadorAlertas() {
 
   return (
     <div 
-      className="fixed top-4 right-4 z-[60] flex items-center gap-2 px-4 py-2 rounded-lg backdrop-blur-md transition-all duration-300 hover:scale-105 shadow-lg"
+      className="fixed top-4 right-4 z-[60] flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-md transition-all duration-300 hover:scale-105 shadow-lg"
       style={{
         background: isActive 
           ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.15))'
@@ -64,10 +64,10 @@ export function IndicadorAlertas() {
           : '0 4px 24px rgba(239, 68, 68, 0.3), 0 0 0 1px rgba(239, 68, 68, 0.1)'
       }}
     >
-      {/* Ícone pulsante */}
+      {/* Ícone pulsante - REDUZIDO */}
       <div className="relative flex items-center justify-center">
         <Radio 
-          className={`w-5 h-5 relative z-10 ${isActive ? 'text-green-400' : 'text-red-400'}`}
+          className={`w-4 h-4 relative z-10 ${isActive ? 'text-green-400' : 'text-red-400'}`}
           style={{
             animation: isActive ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
             filter: 'drop-shadow(0 0 4px currentColor)'
@@ -83,28 +83,23 @@ export function IndicadorAlertas() {
         )}
       </div>
 
-      {/* Texto */}
+      {/* Texto - REDUZIDO */}
       <div className="flex flex-col">
         <span 
-          className="text-sm font-bold tracking-wide"
+          className="text-xs font-bold tracking-wide"
           style={{ 
             color: isActive ? '#22c55e' : '#ef4444',
             textShadow: '0 0 8px currentColor'
           }}
         >
-          {isActive ? '🟢 Alertas Ativos' : '🔴 Alertas Inativos'}
+          {isActive ? '🟢 Alertas' : '🔴 Off'}
         </span>
-        {isActive && (
-          <span className="text-xs text-green-300/80">
-            Live Monitoring
-          </span>
-        )}
       </div>
 
-      {/* Badge de contagem */}
+      {/* Badge de contagem - REDUZIDO */}
       {isActive && telegramStatus.active_positions_tracked > 0 && (
         <span 
-          className="ml-2 px-2.5 py-1 rounded-full text-xs font-bold"
+          className="ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold"
           style={{
             background: 'rgba(34, 197, 94, 0.25)',
             color: '#22c55e',
@@ -112,7 +107,7 @@ export function IndicadorAlertas() {
             boxShadow: '0 0 12px rgba(34, 197, 94, 0.3)'
           }}
         >
-          {telegramStatus.active_positions_tracked} POS
+          {telegramStatus.active_positions_tracked}
         </span>
       )}
     </div>
