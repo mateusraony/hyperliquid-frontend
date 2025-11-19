@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Radio } from 'lucide-react';
 
+const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
+
 /**
  * INDICADOR DE ALERTAS TELEGRAM
  * Componente sutil para mostrar que alertas estão ativos
- * Coloque no topo do seu HyperliquidPro.jsx
  */
 export function IndicadorAlertas() {
   const [telegramStatus, setTelegramStatus] = useState(null);
@@ -13,13 +14,21 @@ export function IndicadorAlertas() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const response = await fetch('https://hyperliquid-whale-backend.onrender.com/telegram/status');
+        const response = await fetch(`${API_URL}/telegram/status`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(5000)
+        });
+        
         if (response.ok) {
           const data = await response.json();
           setTelegramStatus(data);
         }
       } catch (error) {
         console.error('Erro ao verificar status do Telegram:', error);
+        setTelegramStatus(null);
       } finally {
         setLoading(false);
       }
@@ -39,7 +48,7 @@ export function IndicadorAlertas() {
 
   return (
     <div 
-      className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-lg backdrop-blur-sm transition-all duration-300 hover:scale-105"
+      className="fixed top-20 right-4 z-40 flex items-center gap-2 px-3 py-2 rounded-lg backdrop-blur-sm transition-all duration-300 hover:scale-105"
       style={{
         background: isActive 
           ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.1))'
@@ -93,28 +102,7 @@ export function IndicadorAlertas() {
   );
 }
 
-/**
- * COMO USAR:
- * 
- * 1. Copie este arquivo para: src/components/IndicadorAlertas.jsx
- * 
- * 2. No seu HyperliquidPro.jsx, adicione no topo:
- * 
- *    import { IndicadorAlertas } from './IndicadorAlertas';
- * 
- * 3. Dentro do return do HyperliquidPro, adicione:
- * 
- *    return (
- *      <div className="...seu código...">
- *        <IndicadorAlertas />  {/* <-- ADICIONE AQUI */}
- *        ...resto do código...
- *      </div>
- *    );
- * 
- * PRONTO! O indicador aparecerá no canto superior direito! 🎉
- */
-
-// Adicione estes estilos no seu CSS ou no index.css:
+// Adicione estes estilos globalmente (no seu index.css ou App.css)
 const styles = `
 @keyframes pulse {
   0%, 100% {
@@ -133,9 +121,13 @@ const styles = `
 }
 `;
 
-// Se quiser adicionar os estilos programaticamente:
+// Auto-injeta estilos se ainda não existirem
 if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = styles;
-  document.head.appendChild(styleSheet);
+  const existingStyle = document.getElementById('indicador-alertas-styles');
+  if (!existingStyle) {
+    const styleSheet = document.createElement('style');
+    styleSheet.id = 'indicador-alertas-styles';
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
+  }
 }
