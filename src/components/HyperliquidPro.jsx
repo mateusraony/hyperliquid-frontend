@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
-import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Send } from 'lucide-react';
 import { IndicadorAlertas } from './IndicadorAlertas';
 
 const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
@@ -34,6 +34,10 @@ export default function HyperliquidPro() {
   // Estados para ordenação
   const [sortField, setSortField] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
+  
+  // Estados para resumo Telegram
+  const [isSendingResume, setIsSendingResume] = useState(false);
+  const [resumeSuccess, setResumeSuccess] = useState(false);
 
   // Dados de liquidação (SEMPRE VISÍVEIS)
   const liquidationData = {
@@ -50,9 +54,10 @@ export default function HyperliquidPro() {
     var95: -12450,
   };
 
-  // Buscar dados das whales - CORRIGIDO
+  // Buscar dados das whales - COM DEBUG COMPLETO
   const fetchWhales = async () => {
-    console.log('🔄 Iniciando fetchWhales...');
+    console.log('🔄 ============ FETCH WHALES INICIADO ============');
+    console.log('⏰ Horário:', new Date().toLocaleString('pt-BR'));
     
     try {
       setError(null);
@@ -65,39 +70,64 @@ export default function HyperliquidPro() {
         headers: {
           'Content-Type': 'application/json',
         },
-        signal: AbortSignal.timeout(60000) // 60 segundos
+        signal: AbortSignal.timeout(60000)
       });
 
       console.log('📨 Response status:', response.status);
+      console.log('📨 Response OK:', response.ok);
 
       if (!response.ok) {
         throw new Error(`Erro HTTP: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('✅ Dados recebidos:', data);
+      
+      // DEBUG COMPLETO DOS DADOS
+      console.log('✅ DADOS RECEBIDOS DA API:');
+      console.log('📊 Tipo:', Array.isArray(data) ? 'Array' : 'Object');
+      console.log('📊 Estrutura completa:', JSON.stringify(data, null, 2));
+      
+      let whalesArray = [];
       
       if (Array.isArray(data)) {
-        console.log(`📊 ${data.length} whales carregadas`);
-        setWhalesData(data);
+        whalesArray = data;
+        console.log(`📊 ${whalesArray.length} whales no array`);
       } else if (data && Array.isArray(data.whales)) {
-        console.log(`📊 ${data.whales.length} whales carregadas`);
-        setWhalesData(data.whales);
+        whalesArray = data.whales;
+        console.log(`📊 ${whalesArray.length} whales em data.whales`);
       } else {
         console.warn('⚠️ Formato inesperado:', data);
-        setWhalesData([]);
+        whalesArray = [];
       }
       
+      // DEBUG DE CADA WHALE
+      whalesArray.forEach((whale, idx) => {
+        console.log(`\n🐋 WHALE ${idx + 1}:`);
+        console.log('  Address:', whale.address);
+        console.log('  Nickname:', whale.nickname);
+        console.log('  accountValue:', whale.accountValue, typeof whale.accountValue);
+        console.log('  unrealizedPnl:', whale.unrealizedPnl, typeof whale.unrealizedPnl);
+        console.log('  marginUsed:', whale.marginUsed, typeof whale.marginUsed);
+        console.log('  Positions:', whale.positions ? whale.positions.length : 0);
+        console.log('  Campos disponíveis:', Object.keys(whale));
+      });
+      
+      setWhalesData(whalesArray);
       setLastUpdate(new Date());
       setSystemStatus('online');
+      
+      console.log('✅ Dados salvos no state com sucesso!');
+      console.log('🏁 ============ FETCH WHALES FINALIZADO ============\n');
+      
     } catch (err) {
-      console.error('❌ Erro ao buscar whales:', err);
+      console.error('❌ ERRO AO BUSCAR WHALES:', err);
+      console.error('❌ Erro detalhado:', err.message);
+      console.error('❌ Stack:', err.stack);
       setError(err.message);
       setSystemStatus('offline');
       setWhalesData([]);
     } finally {
       setIsLoading(false);
-      console.log('🏁 fetchWhales finalizado');
     }
   };
 
@@ -117,6 +147,9 @@ export default function HyperliquidPro() {
     setAddError('');
 
     try {
+      console.log('➕ Adicionando wallet:', newWalletAddress.trim());
+      console.log('📝 Nickname:', newWalletNickname.trim() || '(sem nickname)');
+      
       const response = await fetch(`${API_URL}/whales`, {
         method: 'POST',
         headers: {
@@ -134,13 +167,14 @@ export default function HyperliquidPro() {
         throw new Error(errorData.detail || 'Erro ao adicionar whale');
       }
 
+      console.log('✅ Wallet adicionada com sucesso!');
       await fetchWhales();
       setNewWalletAddress('');
       setNewWalletNickname('');
       setShowAddModal(false);
       
     } catch (err) {
-      console.error('Erro ao adicionar whale:', err);
+      console.error('❌ Erro ao adicionar whale:', err);
       setAddError(err.message);
     } finally {
       setIsAddingWallet(false);
@@ -160,6 +194,8 @@ export default function HyperliquidPro() {
     setIsDeletingWallet(true);
 
     try {
+      console.log('🗑️ Removendo wallet:', walletToDelete.address);
+      
       const response = await fetch(`${API_URL}/whales/${walletToDelete.address}`, {
         method: 'DELETE',
         headers: {
@@ -173,15 +209,50 @@ export default function HyperliquidPro() {
         throw new Error(errorData.detail || 'Erro ao remover whale');
       }
 
+      console.log('✅ Wallet removida com sucesso!');
       await fetchWhales();
       setShowDeleteModal(false);
       setWalletToDelete(null);
       
     } catch (err) {
-      console.error('Erro ao deletar whale:', err);
+      console.error('❌ Erro ao deletar whale:', err);
       alert(`Erro ao remover: ${err.message}`);
     } finally {
       setIsDeletingWallet(false);
+    }
+  };
+
+  // NOVA FUNCIONALIDADE: Enviar resumo Telegram com IA
+  const handleSendTelegramResume = async () => {
+    setIsSendingResume(true);
+    setResumeSuccess(false);
+    
+    try {
+      console.log('📱 Enviando resumo Telegram...');
+      
+      const response = await fetch(`${API_URL}/telegram/send-resume`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(30000)
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao enviar resumo');
+      }
+
+      const result = await response.json();
+      console.log('✅ Resumo enviado:', result);
+      
+      setResumeSuccess(true);
+      setTimeout(() => setResumeSuccess(false), 3000);
+      
+    } catch (err) {
+      console.error('❌ Erro ao enviar resumo:', err);
+      alert('Erro ao enviar resumo. Verifique o console.');
+    } finally {
+      setIsSendingResume(false);
     }
   };
 
@@ -229,11 +300,12 @@ export default function HyperliquidPro() {
 
   // Carregamento inicial e atualização automática
   useEffect(() => {
-    console.log('🚀 Component montado, iniciando carregamento...');
+    console.log('🚀 ============ COMPONENT MONTADO ============');
+    console.log('⏰ Horário:', new Date().toLocaleString('pt-BR'));
     fetchWhales();
     
     const interval = setInterval(() => {
-      console.log('⏰ Auto-refresh (30s)');
+      console.log('\n⏰ ============ AUTO-REFRESH (30s) ============');
       fetchWhales();
     }, 30000);
     
@@ -243,7 +315,7 @@ export default function HyperliquidPro() {
     };
   }, []);
 
-  // Formatação MELHORADA para caber nas caixas
+  // Formatação
   const formatCurrency = (value) => {
     if (!value && value !== 0) return '$0';
     
@@ -258,16 +330,6 @@ export default function HyperliquidPro() {
     } else {
       return `$${value.toFixed(0)}`;
     }
-  };
-
-  const formatCurrencyFull = (value) => {
-    if (!value && value !== 0) return '$0';
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
   };
 
   const SortIcon = ({ field }) => {
@@ -293,9 +355,13 @@ export default function HyperliquidPro() {
 
   // Calcular métricas totais REAIS das whales
   const totalMetrics = whalesData.reduce((acc, whale) => {
-    acc.totalValue += whale.accountValue || 0;
-    acc.totalPnL += whale.unrealizedPnl || 0;
-    acc.totalPositions += (whale.positions || []).length;
+    const accountValue = whale.accountValue || whale.account_value || 0;
+    const pnl = whale.unrealizedPnl || whale.unrealized_pnl || 0;
+    const positions = whale.positions || whale.active_positions || [];
+    
+    acc.totalValue += accountValue;
+    acc.totalPnL += pnl;
+    acc.totalPositions += positions.length;
     return acc;
   }, { totalValue: 0, totalPnL: 0, totalPositions: 0 });
 
@@ -306,8 +372,10 @@ export default function HyperliquidPro() {
       scrollbarWidth: 'thin',
       scrollbarColor: '#6366f1 #1e293b'
     }}>
-      {/* INDICADOR DE ALERTAS - POSICIONADO AQUI */}
-      <IndicadorAlertas />
+      {/* INDICADOR DE ALERTAS - AJUSTADO PARA SER VISÍVEL */}
+      <div className="relative">
+        <IndicadorAlertas />
+      </div>
 
       <style>{`
         ::-webkit-scrollbar {
@@ -325,7 +393,6 @@ export default function HyperliquidPro() {
         ::-webkit-scrollbar-thumb:hover {
           background: linear-gradient(180deg, #2563eb 0%, #7c3aed 100%);
         }
-        /* Prevenir overflow em todos os cards */
         .metric-card {
           overflow: hidden;
         }
@@ -370,9 +437,36 @@ export default function HyperliquidPro() {
                 onClick={fetchWhales} 
                 disabled={isLoading} 
                 className="p-1.5 hover:bg-slate-800 rounded disabled:opacity-50"
-                title={isLoading ? "Atualizando..." : "Atualizar dados"}
-              >
+                title={isLoading ? "Atualizando..." : "Atualizar dados"}>
                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-blue-400' : ''}`} />
+              </button>
+              
+              {/* BOTÃO RESUMO TELEGRAM */}
+              <button 
+                onClick={handleSendTelegramResume}
+                disabled={isSendingResume || whalesData.length === 0}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded text-sm font-medium shadow-lg transition-all ${
+                  resumeSuccess 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+                } disabled:opacity-50`}
+                title="Envia resumo completo com análise de IA via Telegram">
+                {isSendingResume ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : resumeSuccess ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Enviado!
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    📱 Resumo Telegram
+                  </>
+                )}
               </button>
               
               <button 
@@ -414,7 +508,7 @@ export default function HyperliquidPro() {
         
         {tab === 'command' && (
           <div className="space-y-4">
-            {/* Mensagem de erro se houver */}
+            {/* Mensagem de erro */}
             {error && (
               <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 flex items-center gap-3">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
@@ -436,10 +530,11 @@ export default function HyperliquidPro() {
                 <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-3" />
                 <p className="text-slate-400">Carregando dados das whales...</p>
                 <p className="text-xs text-slate-500 mt-2">Isso pode levar até 60 segundos</p>
+                <p className="text-xs text-slate-600 mt-1">Veja o console (F12) para detalhes</p>
               </div>
             )}
 
-            {/* Métricas Principais com dados REAIS - CSS CORRIGIDO */}
+            {/* Métricas Principais */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
               <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                 <p className="text-slate-400 text-xs uppercase mb-1">Total Value</p>
@@ -513,7 +608,7 @@ export default function HyperliquidPro() {
               </div>
             </div>
 
-            {/* Liquidações SEMPRE ABERTAS - SEM COLLAPSE */}
+            {/* Liquidações */}
             <div className="bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-lg p-4">
               <div className="flex items-center gap-3 mb-4">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
@@ -548,19 +643,13 @@ export default function HyperliquidPro() {
                         <span className="text-slate-400">⚡ Média/trade:</span>
                         <span className="font-bold metric-value">${(data.profit/data.trades/1000).toFixed(1)}K</span>
                       </div>
-                      <div className="mt-2 pt-2 border-t border-slate-700/50">
-                        <p className="text-[10px] text-slate-500 italic">
-                          Quando traders são liquidados, suas posições são fechadas à força. 
-                          Você pode lucrar posicionando-se contra eles antes da liquidação.
-                        </p>
-                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Lista de Whales Monitoradas - COM NICKNAME PERSISTINDO */}
+            {/* Lista de Whales */}
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-bold">🐋 Whales Monitoradas ({whalesData.length})</h3>
@@ -610,33 +699,53 @@ export default function HyperliquidPro() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedData.map((whale, idx) => (
-                        <tr key={whale.address} className="border-b border-slate-700/30 hover:bg-slate-700/20">
-                          <td className="py-2 px-3">
-                            <div className="font-semibold metric-value">{whale.nickname || `Whale #${idx + 1}`}</div>
-                            <div className="text-xs text-slate-400 font-mono metric-value">{whale.address.slice(0, 6)}...{whale.address.slice(-4)}</div>
-                          </td>
-                          <td className="text-right py-2 px-3 text-blue-400 font-bold metric-value">{formatCurrency(whale.accountValue || 0)}</td>
-                          <td className={`text-right py-2 px-3 font-bold metric-value ${(whale.unrealizedPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {formatCurrency(whale.unrealizedPnl || 0)}
-                          </td>
-                          <td className="text-right py-2 px-3 metric-value">{formatCurrency(whale.marginUsed || 0)}</td>
-                          <td className="text-center py-2 px-3 font-bold">{(whale.positions || []).length}</td>
-                          <td className="text-center py-2 px-3">
-                            <div className="flex items-center justify-center gap-2">
-                              <a href={`https://hypurrscan.io/address/${whale.address}`} target="_blank" rel="noopener noreferrer"
-                                className="text-blue-400 hover:text-blue-300 text-xs">
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                              <button
-                                onClick={() => confirmDeleteWhale(whale)}
-                                className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {sortedData.map((whale, idx) => {
+                        // Suporte para múltiplos formatos de campo
+                        const accountValue = whale.accountValue || whale.account_value || 0;
+                        const pnl = whale.unrealizedPnl || whale.unrealized_pnl || 0;
+                        const margin = whale.marginUsed || whale.margin_used || whale.total_margin_used || 0;
+                        const positions = whale.positions || whale.active_positions || [];
+                        const nickname = whale.nickname || `Whale #${idx + 1}`;
+                        
+                        return (
+                          <tr key={whale.address} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                            <td className="py-2 px-3">
+                              <div className="font-semibold metric-value">{nickname}</div>
+                              <div className="text-xs text-slate-400 font-mono metric-value">
+                                {whale.address.slice(0, 6)}...{whale.address.slice(-4)}
+                              </div>
+                            </td>
+                            <td className="text-right py-2 px-3 text-blue-400 font-bold metric-value">
+                              {formatCurrency(accountValue)}
+                            </td>
+                            <td className={`text-right py-2 px-3 font-bold metric-value ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {formatCurrency(pnl)}
+                            </td>
+                            <td className="text-right py-2 px-3 metric-value">
+                              {formatCurrency(margin)}
+                            </td>
+                            <td className="text-center py-2 px-3 font-bold">
+                              {positions.length}
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <div className="flex items-center justify-center gap-2">
+                                <a 
+                                  href={`https://hypurrscan.io/address/${whale.address}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-blue-400 hover:text-blue-300 text-xs">
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                                <button
+                                  onClick={() => confirmDeleteWhale(whale)}
+                                  className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-500/20">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -703,8 +812,7 @@ export default function HyperliquidPro() {
                   setNewWalletAddress('');
                   setNewWalletNickname('');
                 }}
-                className="text-slate-400 hover:text-white transition-colors"
-              >
+                className="text-slate-400 hover:text-white transition-colors">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -752,15 +860,13 @@ export default function HyperliquidPro() {
                     setNewWalletNickname('');
                   }}
                   disabled={isAddingWallet}
-                  className="flex-1 px-4 py-3 border-2 border-slate-600 rounded-lg text-slate-300 font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50"
-                >
+                  className="flex-1 px-4 py-3 border-2 border-slate-600 rounded-lg text-slate-300 font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50">
                   Cancelar
                 </button>
                 <button
                   onClick={handleAddWhale}
                   disabled={isAddingWallet || !newWalletAddress.trim()}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-white font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                >
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-white font-semibold hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                   {isAddingWallet ? (
                     <>
                       <RefreshCw className="w-5 h-5 animate-spin" />
@@ -794,8 +900,7 @@ export default function HyperliquidPro() {
                   setWalletToDelete(null);
                 }}
                 disabled={isDeletingWallet}
-                className="text-slate-400 hover:text-white transition-colors disabled:opacity-50"
-              >
+                className="text-slate-400 hover:text-white transition-colors disabled:opacity-50">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -821,15 +926,13 @@ export default function HyperliquidPro() {
                     setWalletToDelete(null);
                   }}
                   disabled={isDeletingWallet}
-                  className="flex-1 px-4 py-3 border-2 border-slate-600 rounded-lg text-slate-300 font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50"
-                >
+                  className="flex-1 px-4 py-3 border-2 border-slate-600 rounded-lg text-slate-300 font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50">
                   Cancelar
                 </button>
                 <button
                   onClick={handleDeleteWhale}
                   disabled={isDeletingWallet}
-                  className="flex-1 px-4 py-3 bg-red-600 rounded-lg text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
+                  className="flex-1 px-4 py-3 bg-red-600 rounded-lg text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
                   {isDeletingWallet ? (
                     <>
                       <RefreshCw className="w-5 h-5 animate-spin" />
