@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { IndicadorAlertas } from './IndicadorAlertas';
 
 const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
 
@@ -49,42 +50,54 @@ export default function HyperliquidPro() {
     var95: -12450,
   };
 
-  // Buscar dados das whales
+  // Buscar dados das whales - CORRIGIDO
   const fetchWhales = async () => {
+    console.log('🔄 Iniciando fetchWhales...');
+    
     try {
       setError(null);
+      setIsLoading(true);
+      
+      console.log('📡 Chamando API:', `${API_URL}/whales`);
       
       const response = await fetch(`${API_URL}/whales`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        signal: AbortSignal.timeout(60000)
+        signal: AbortSignal.timeout(60000) // 60 segundos
       });
+
+      console.log('📨 Response status:', response.status);
 
       if (!response.ok) {
         throw new Error(`Erro HTTP: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('✅ Dados recebidos:', data);
       
       if (Array.isArray(data)) {
+        console.log(`📊 ${data.length} whales carregadas`);
         setWhalesData(data);
       } else if (data && Array.isArray(data.whales)) {
+        console.log(`📊 ${data.whales.length} whales carregadas`);
         setWhalesData(data.whales);
       } else {
+        console.warn('⚠️ Formato inesperado:', data);
         setWhalesData([]);
       }
       
       setLastUpdate(new Date());
-      setIsLoading(false);
       setSystemStatus('online');
     } catch (err) {
-      console.error('Erro ao buscar whales:', err);
+      console.error('❌ Erro ao buscar whales:', err);
       setError(err.message);
-      setIsLoading(false);
       setSystemStatus('offline');
       setWhalesData([]);
+    } finally {
+      setIsLoading(false);
+      console.log('🏁 fetchWhales finalizado');
     }
   };
 
@@ -214,10 +227,20 @@ export default function HyperliquidPro() {
     return sorted;
   };
 
+  // Carregamento inicial e atualização automática
   useEffect(() => {
+    console.log('🚀 Component montado, iniciando carregamento...');
     fetchWhales();
-    const interval = setInterval(fetchWhales, 30000);
-    return () => clearInterval(interval);
+    
+    const interval = setInterval(() => {
+      console.log('⏰ Auto-refresh (30s)');
+      fetchWhales();
+    }, 30000);
+    
+    return () => {
+      console.log('🛑 Limpando interval');
+      clearInterval(interval);
+    };
   }, []);
 
   // Formatação MELHORADA para caber nas caixas
@@ -283,6 +306,9 @@ export default function HyperliquidPro() {
       scrollbarWidth: 'thin',
       scrollbarColor: '#6366f1 #1e293b'
     }}>
+      {/* INDICADOR DE ALERTAS - POSICIONADO AQUI */}
+      <IndicadorAlertas />
+
       <style>{`
         ::-webkit-scrollbar {
           width: 12px;
@@ -340,8 +366,13 @@ export default function HyperliquidPro() {
                 </span>
               </div>
 
-              <button onClick={fetchWhales} disabled={isLoading} className="p-1.5 hover:bg-slate-800 rounded">
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              <button 
+                onClick={fetchWhales} 
+                disabled={isLoading} 
+                className="p-1.5 hover:bg-slate-800 rounded disabled:opacity-50"
+                title={isLoading ? "Atualizando..." : "Atualizar dados"}
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-blue-400' : ''}`} />
               </button>
               
               <button 
@@ -383,6 +414,31 @@ export default function HyperliquidPro() {
         
         {tab === 'command' && (
           <div className="space-y-4">
+            {/* Mensagem de erro se houver */}
+            {error && (
+              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+                <div>
+                  <p className="text-red-400 font-semibold">Erro ao carregar dados</p>
+                  <p className="text-red-300 text-sm">{error}</p>
+                  <button 
+                    onClick={fetchWhales}
+                    className="mt-2 text-xs bg-red-600 hover:bg-red-700 px-3 py-1 rounded">
+                    Tentar novamente
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {isLoading && whalesData.length === 0 && (
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
+                <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-3" />
+                <p className="text-slate-400">Carregando dados das whales...</p>
+                <p className="text-xs text-slate-500 mt-2">Isso pode levar até 60 segundos</p>
+              </div>
+            )}
+
             {/* Métricas Principais com dados REAIS - CSS CORRIGIDO */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
               <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
@@ -508,9 +564,14 @@ export default function HyperliquidPro() {
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-bold">🐋 Whales Monitoradas ({whalesData.length})</h3>
+                {lastUpdate && (
+                  <p className="text-xs text-slate-400">
+                    Atualizado: {lastUpdate.toLocaleTimeString('pt-BR')}
+                  </p>
+                )}
               </div>
               
-              {whalesData.length === 0 ? (
+              {whalesData.length === 0 && !isLoading ? (
                 <div className="text-center py-8 text-slate-400">
                   <p>Nenhuma whale monitorada</p>
                   <p className="text-sm">Clique em "+ Add Wallet" para começar</p>
