@@ -421,6 +421,38 @@ export default function HyperliquidPro() {
     return acc;
   }, { totalValue: 0, totalPnL: 0, totalPositions: 0 });
 
+  // ============================================
+  // FASE 1: CALCULAR LONG/SHORT REAL - NOVO!
+  // ============================================
+  const longShortMetrics = whalesData.reduce((acc, whale) => {
+    const positions = whale.positions || whale.active_positions || [];
+    
+    positions.forEach(pos => {
+      // Identificar se é LONG ou SHORT
+      const side = pos.side || '';
+      const szi = parseFloat(pos.szi || 0);
+      
+      // szi positivo = LONG, negativo = SHORT
+      const isLong = szi > 0 || side === 'L' || side === 'LONG';
+      
+      if (isLong) {
+        acc.totalLongs++;
+      } else {
+        acc.totalShorts++;
+      }
+    });
+    
+    return acc;
+  }, { totalLongs: 0, totalShorts: 0 });
+
+  // Calcular percentuais
+  const totalTrades = longShortMetrics.totalLongs + longShortMetrics.totalShorts;
+  const longPercentage = totalTrades > 0 ? ((longShortMetrics.totalLongs / totalTrades) * 100).toFixed(0) : 0;
+  const shortPercentage = totalTrades > 0 ? ((longShortMetrics.totalShorts / totalTrades) * 100).toFixed(0) : 0;
+  // ============================================
+  // FIM FASE 1
+  // ============================================
+
   const sortedData = getSortedData();
 
   return (
@@ -635,22 +667,22 @@ export default function HyperliquidPro() {
               </div>
             </div>
 
-            {/* Métricas LONG/SHORT */}
+            {/* Métricas LONG/SHORT - AGORA COM DADOS REAIS! */}
             <div className="bg-gradient-to-r from-green-500/10 to-orange-500/10 border border-slate-700/50 rounded-lg p-4">
               <div className="flex items-center gap-3 mb-3">
                 <BarChart3 className="w-5 h-5 text-blue-400" />
-                <h3 className="text-lg font-bold">📊 Métricas LONG vs SHORT (30 dias)</h3>
+                <h3 className="text-lg font-bold">📊 Métricas LONG vs SHORT (Ao Vivo)</h3>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">Total LONGs</p>
-                  <p className="text-3xl font-bold text-green-400">145</p>
-                  <p className="text-xs text-green-400">62% dos trades</p>
+                  <p className="text-3xl font-bold text-green-400">{longShortMetrics.totalLongs}</p>
+                  <p className="text-xs text-green-400">{longPercentage}% das posições</p>
                 </div>
                 <div className="bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">Total SHORTs</p>
-                  <p className="text-3xl font-bold text-orange-400">89</p>
-                  <p className="text-xs text-orange-400">38% dos trades</p>
+                  <p className="text-3xl font-bold text-orange-400">{longShortMetrics.totalShorts}</p>
+                  <p className="text-xs text-orange-400">{shortPercentage}% das posições</p>
                 </div>
                 <div className="bg-slate-900/50 rounded p-3">
                   <p className="text-xs text-slate-400 mb-1">LONGs Win Rate</p>
