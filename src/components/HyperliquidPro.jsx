@@ -42,6 +42,10 @@ export default function HyperliquidPro() {
   const [telegramStatus, setTelegramStatus] = useState('checking');
   const [telegramData, setTelegramData] = useState(null);
 
+  // NOVO FASE 2: Estados para filtros nas abas Positions e Orders
+  const [positionsFilter, setPositionsFilter] = useState('all'); // 'all', 'long', 'short'
+  const [ordersFilter, setOrdersFilter] = useState('all'); // 'all', 'buy', 'sell'
+
   // Dados de liquidação (SEMPRE VISÍVEIS)
   const liquidationData = {
     '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
@@ -325,6 +329,84 @@ export default function HyperliquidPro() {
     return sorted;
   };
 
+  // ============================================
+  // FASE 2: FUNÇÕES PARA PROCESSAR POSITIONS
+  // ============================================
+  const getAllPositions = () => {
+    const allPositions = [];
+    
+    whalesData.forEach(whale => {
+      const positions = whale.positions || whale.active_positions || [];
+      const nickname = whale.nickname || `Whale ${whale.address.slice(0, 6)}`;
+      
+      positions.forEach(pos => {
+        allPositions.push({
+          ...pos,
+          whaleAddress: whale.address,
+          whaleNickname: nickname
+        });
+      });
+    });
+    
+    return allPositions;
+  };
+
+  const getFilteredPositions = () => {
+    let positions = getAllPositions();
+    
+    if (positionsFilter !== 'all') {
+      positions = positions.filter(pos => {
+        const szi = parseFloat(pos.szi || 0);
+        const side = pos.side || '';
+        const isLong = szi > 0 || side === 'L' || side === 'LONG';
+        
+        if (positionsFilter === 'long') return isLong;
+        if (positionsFilter === 'short') return !isLong;
+        return true;
+      });
+    }
+    
+    return positions;
+  };
+
+  // ============================================
+  // FASE 2: FUNÇÕES PARA PROCESSAR ORDERS (se disponível)
+  // ============================================
+  const getAllOrders = () => {
+    const allOrders = [];
+    
+    whalesData.forEach(whale => {
+      const orders = whale.orders || whale.open_orders || [];
+      const nickname = whale.nickname || `Whale ${whale.address.slice(0, 6)}`;
+      
+      orders.forEach(order => {
+        allOrders.push({
+          ...order,
+          whaleAddress: whale.address,
+          whaleNickname: nickname
+        });
+      });
+    });
+    
+    return allOrders;
+  };
+
+  const getFilteredOrders = () => {
+    let orders = getAllOrders();
+    
+    if (ordersFilter !== 'all') {
+      orders = orders.filter(order => {
+        const side = (order.side || order.orderType || '').toLowerCase();
+        if (ordersFilter === 'buy') return side.includes('buy') || side.includes('long');
+        if (ordersFilter === 'sell') return side.includes('sell') || side.includes('short');
+        return true;
+      });
+    }
+    
+    return orders;
+  };
+  // ============================================
+
   // Carregamento inicial e atualização automática
   useEffect(() => {
     console.log('🚀 ============ COMPONENT MONTADO ============');
@@ -422,7 +504,7 @@ export default function HyperliquidPro() {
   }, { totalValue: 0, totalPnL: 0, totalPositions: 0 });
 
   // ============================================
-  // FASE 1: CALCULAR LONG/SHORT REAL - NOVO!
+  // FASE 1: CALCULAR LONG/SHORT REAL
   // ============================================
   const longShortMetrics = whalesData.reduce((acc, whale) => {
     const positions = whale.positions || whale.active_positions || [];
@@ -449,8 +531,6 @@ export default function HyperliquidPro() {
   const totalTrades = longShortMetrics.totalLongs + longShortMetrics.totalShorts;
   const longPercentage = totalTrades > 0 ? ((longShortMetrics.totalLongs / totalTrades) * 100).toFixed(0) : 0;
   const shortPercentage = totalTrades > 0 ? ((longShortMetrics.totalShorts / totalTrades) * 100).toFixed(0) : 0;
-  // ============================================
-  // FIM FASE 1
   // ============================================
 
   const sortedData = getSortedData();
@@ -896,7 +976,349 @@ export default function HyperliquidPro() {
           </div>
         )}
 
-        {tab !== 'command' && (
+        {/* ============================================ */}
+        {/* FASE 2: ABA POSITIONS - NOVA IMPLEMENTAÇÃO! */}
+        {/* ============================================ */}
+        {tab === 'positions' && (
+          <div className="space-y-4">
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <BarChart3 className="w-6 h-6 text-blue-400" />
+                  <div>
+                    <h2 className="text-xl font-bold">📊 Todas as Posições Abertas</h2>
+                    <p className="text-xs text-slate-400">
+                      {getFilteredPositions().length} posições de {whalesData.length} whales
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Filtros */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPositionsFilter('all')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      positionsFilter === 'all'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}>
+                    Todas
+                  </button>
+                  <button
+                    onClick={() => setPositionsFilter('long')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      positionsFilter === 'long'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}>
+                    🟢 LONG
+                  </button>
+                  <button
+                    onClick={() => setPositionsFilter('short')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      positionsFilter === 'short'
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}>
+                    🔴 SHORT
+                  </button>
+                </div>
+              </div>
+
+              {getFilteredPositions().length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>Nenhuma posição aberta no momento</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        <th className="text-left py-2 px-3 text-slate-400 font-semibold">TOKEN</th>
+                        <th className="text-left py-2 px-3 text-slate-400 font-semibold">WHALE</th>
+                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">LADO</th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">TAMANHO</th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">VALOR</th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">PNL</th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">LIQUIDAÇÃO</th>
+                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">AÇÕES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getFilteredPositions().map((pos, idx) => {
+                        const coin = pos.coin || pos.symbol || pos.asset || 'N/A';
+                        const szi = parseFloat(pos.szi || 0);
+                        const side = pos.side || '';
+                        const isLong = szi > 0 || side === 'L' || side === 'LONG';
+                        
+                        const size = Math.abs(szi);
+                        const posValue = parseFloat(pos.positionValue || pos.position_value || 0);
+                        const pnl = parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0);
+                        const liquidationPx = parseFloat(pos.liquidationPx || pos.liquidation_px || 0);
+                        const entryPx = parseFloat(pos.entryPx || pos.entry_px || 0);
+                        
+                        // Calcular distância de liquidação
+                        let distLiq = 0;
+                        if (liquidationPx && entryPx) {
+                          distLiq = Math.abs(((liquidationPx - entryPx) / entryPx) * 100);
+                        }
+                        
+                        return (
+                          <tr key={`${pos.whaleAddress}-${coin}-${idx}`} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                            <td className="py-2 px-3 font-bold text-blue-400">
+                              {coin}
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="font-semibold">{pos.whaleNickname}</div>
+                              <div className="text-xs text-slate-400 font-mono">
+                                {pos.whaleAddress.slice(0, 6)}...{pos.whaleAddress.slice(-4)}
+                              </div>
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                isLong 
+                                  ? 'bg-green-500/20 text-green-400' 
+                                  : 'bg-orange-500/20 text-orange-400'
+                              }`}>
+                                {isLong ? '🟢 LONG' : '🔴 SHORT'}
+                              </span>
+                            </td>
+                            <td className="text-right py-2 px-3 font-mono">
+                              {size.toFixed(4)}
+                            </td>
+                            <td className="text-right py-2 px-3 font-bold">
+                              {formatCurrency(posValue)}
+                            </td>
+                            <td className={`text-right py-2 px-3 font-bold ${
+                              pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {formatCurrency(pnl)}
+                            </td>
+                            <td className={`text-right py-2 px-3 font-bold ${
+                              distLiq < 5 ? 'text-red-400' : distLiq < 15 ? 'text-yellow-400' : 'text-green-400'
+                            }`}>
+                              {distLiq > 0 ? `${distLiq.toFixed(1)}%` : '-'}
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <a 
+                                href={`https://hypurrscan.io/address/${pos.whaleAddress}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-400 hover:text-blue-300">
+                                <ExternalLink className="w-3.5 h-3.5 inline" />
+                              </a>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Resumo da aba Positions */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-gradient-to-r from-green-500/10 to-green-500/5 border border-green-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="w-5 h-5 text-green-400" />
+                  <h3 className="font-bold text-green-400">Posições LONG</h3>
+                </div>
+                <p className="text-3xl font-bold text-green-400">
+                  {getFilteredPositions().filter(p => {
+                    const szi = parseFloat(p.szi || 0);
+                    return szi > 0 || (p.side || '').includes('LONG');
+                  }).length}
+                </p>
+              </div>
+              
+              <div className="bg-gradient-to-r from-orange-500/10 to-orange-500/5 border border-orange-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingDown className="w-5 h-5 text-orange-400" />
+                  <h3 className="font-bold text-orange-400">Posições SHORT</h3>
+                </div>
+                <p className="text-3xl font-bold text-orange-400">
+                  {getFilteredPositions().filter(p => {
+                    const szi = parseFloat(p.szi || 0);
+                    return szi < 0 || (p.side || '').includes('SHORT');
+                  }).length}
+                </p>
+              </div>
+              
+              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/5 border border-blue-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign className="w-5 h-5 text-blue-400" />
+                  <h3 className="font-bold text-blue-400">Valor Total</h3>
+                </div>
+                <p className="text-3xl font-bold text-blue-400">
+                  {formatCurrency(
+                    getFilteredPositions().reduce((sum, p) => 
+                      sum + (parseFloat(p.positionValue || p.position_value || 0)), 0
+                    )
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================ */}
+        {/* FASE 2: ABA ORDERS - NOVA IMPLEMENTAÇÃO! */}
+        {/* ============================================ */}
+        {tab === 'orders' && (
+          <div className="space-y-4">
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-6 h-6 text-yellow-400" />
+                  <div>
+                    <h2 className="text-xl font-bold">⏰ Ordens Pendentes</h2>
+                    <p className="text-xs text-slate-400">
+                      {getFilteredOrders().length} ordens aguardando execução
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Filtros */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setOrdersFilter('all')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      ordersFilter === 'all'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}>
+                    Todas
+                  </button>
+                  <button
+                    onClick={() => setOrdersFilter('buy')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      ordersFilter === 'buy'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}>
+                    🟢 BUY
+                  </button>
+                  <button
+                    onClick={() => setOrdersFilter('sell')}
+                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                      ordersFilter === 'sell'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}>
+                    🔴 SELL
+                  </button>
+                </div>
+              </div>
+
+              {getAllOrders().length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-semibold mb-1">Nenhuma ordem pendente no momento</p>
+                  <p className="text-xs">
+                    As ordens aparecerão aqui quando as whales criarem limit orders ou stop orders
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        <th className="text-left py-2 px-3 text-slate-400 font-semibold">TOKEN</th>
+                        <th className="text-left py-2 px-3 text-slate-400 font-semibold">WHALE</th>
+                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">TIPO</th>
+                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">LADO</th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">PREÇO</th>
+                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">QUANTIDADE</th>
+                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">STATUS</th>
+                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">AÇÕES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getFilteredOrders().map((order, idx) => {
+                        const coin = order.coin || order.symbol || order.asset || 'N/A';
+                        const orderType = order.orderType || order.type || 'LIMIT';
+                        const side = order.side || '';
+                        const isBuy = side.toLowerCase().includes('buy') || side.toLowerCase().includes('long');
+                        
+                        const price = parseFloat(order.limitPx || order.price || 0);
+                        const sz = parseFloat(order.sz || order.size || 0);
+                        const status = order.status || 'PENDING';
+                        
+                        return (
+                          <tr key={`${order.whaleAddress}-${coin}-${idx}`} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                            <td className="py-2 px-3 font-bold text-blue-400">
+                              {coin}
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="font-semibold">{order.whaleNickname}</div>
+                              <div className="text-xs text-slate-400 font-mono">
+                                {order.whaleAddress.slice(0, 6)}...{order.whaleAddress.slice(-4)}
+                              </div>
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <span className="px-2 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300">
+                                {orderType}
+                              </span>
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                isBuy 
+                                  ? 'bg-green-500/20 text-green-400' 
+                                  : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                {isBuy ? '🟢 BUY' : '🔴 SELL'}
+                              </span>
+                            </td>
+                            <td className="text-right py-2 px-3 font-mono font-bold">
+                              ${price.toFixed(2)}
+                            </td>
+                            <td className="text-right py-2 px-3 font-mono">
+                              {sz.toFixed(4)}
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                                {status}
+                              </span>
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <a 
+                                href={`https://hypurrscan.io/address/${order.whaleAddress}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-400 hover:text-blue-300">
+                                <ExternalLink className="w-3.5 h-3.5 inline" />
+                              </a>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Info sobre Orders */}
+            {getAllOrders().length === 0 && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <Bell className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-blue-400 mb-1">📱 Alertas Telegram Ativos</p>
+                    <p className="text-sm text-slate-300">
+                      Você receberá uma notificação no Telegram sempre que uma whale criar, executar ou cancelar uma ordem.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Outras abas permanecem iguais */}
+        {!['command', 'positions', 'orders'].includes(tab) && (
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
             <h2 className="text-xl font-bold mb-4">Em desenvolvimento</h2>
             <p className="text-slate-400">Aba {tab} será implementada em breve</p>
