@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Send } from 'lucide-react';
-import { IndicadorAlertas } from './IndicadorAlertas';
 
 const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
 
@@ -38,6 +37,10 @@ export default function HyperliquidPro() {
   // Estados para resumo Telegram
   const [isSendingResume, setIsSendingResume] = useState(false);
   const [resumeSuccess, setResumeSuccess] = useState(false);
+  
+  // NOVO: Estados para indicador Telegram integrado
+  const [telegramStatus, setTelegramStatus] = useState('checking');
+  const [telegramData, setTelegramData] = useState(null);
 
   // Dados de liquidação (SEMPRE VISÍVEIS)
   const liquidationData = {
@@ -52,6 +55,29 @@ export default function HyperliquidPro() {
     avgRR: 2.8,
     correlation: 78,
     var95: -12450,
+  };
+
+  // NOVO: Verificar status do Telegram
+  const checkTelegramStatus = async () => {
+    try {
+      const response = await fetch(`${API_URL}/telegram/status`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setTelegramData(data);
+        
+        const isActive = data.enabled && data.bot_token_configured && data.chat_id_configured;
+        setTelegramStatus(isActive ? 'active' : 'inactive');
+      } else {
+        setTelegramStatus('error');
+      }
+    } catch (error) {
+      setTelegramStatus('error');
+    }
   };
 
   // Buscar dados das whales - COM DEBUG COMPLETO
@@ -304,10 +330,12 @@ export default function HyperliquidPro() {
     console.log('🚀 ============ COMPONENT MONTADO ============');
     console.log('⏰ Horário:', new Date().toLocaleString('pt-BR'));
     fetchWhales();
+    checkTelegramStatus();
     
     const interval = setInterval(() => {
       console.log('\n⏰ ============ AUTO-REFRESH (30s) ============');
       fetchWhales();
+      checkTelegramStatus();
     }, 30000);
     
     return () => {
@@ -353,6 +381,24 @@ export default function HyperliquidPro() {
     if (systemStatus === 'warning') return 'yellow';
     return 'red';
   };
+  
+  // NOVO: Funções para indicador Telegram
+  const getTelegramIcon = () => {
+    switch (telegramStatus) {
+      case 'active': return '✅';
+      case 'sending': return '⏳';
+      case 'error': return '❌';
+      default: return '⚙️';
+    }
+  };
+
+  const getTelegramColor = () => {
+    switch (telegramStatus) {
+      case 'active': return 'text-green-400';
+      case 'error': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
 
   // Calcular métricas totais REAIS das whales - CORRIGIDO
   const totalMetrics = whalesData.reduce((acc, whale) => {
@@ -382,11 +428,6 @@ export default function HyperliquidPro() {
       scrollbarWidth: 'thin',
       scrollbarColor: '#6366f1 #1e293b'
     }}>
-      {/* INDICADOR DE ALERTAS - AJUSTADO PARA SER VISÍVEL */}
-      <div className="relative">
-        <IndicadorAlertas />
-      </div>
-
       <style>{`
         ::-webkit-scrollbar {
           width: 12px;
@@ -436,10 +477,16 @@ export default function HyperliquidPro() {
                 <ExternalLink className="w-3 h-3" />HyperDash
               </a>
               
+              {/* STATUS LIVE COM TELEGRAM INTEGRADO - COMPACTO */}
               <div className={`flex items-center gap-2 bg-${getStatusColor()}-500/10 border border-${getStatusColor()}-500/30 px-3 py-1 rounded text-xs`}>
                 <div className={`w-2 h-2 bg-${getStatusColor()}-400 rounded-full animate-pulse`}></div>
-                <span className={`text-${getStatusColor()}-400 font-medium flex items-center gap-1`}>
+                <span className={`text-${getStatusColor()}-400 font-medium flex items-center gap-2`}>
                   {getStatusEmoji()} Live • {whalesData.length}
+                  {/* INDICADOR TELEGRAM INTEGRADO */}
+                  <span className="flex items-center gap-1 ml-1 pl-2 border-l border-slate-600">
+                    <span className={`text-xs ${getTelegramColor()}`}>{getTelegramIcon()}</span>
+                    <span className="text-[10px] text-slate-400">TG</span>
+                  </span>
                 </span>
               </div>
 
