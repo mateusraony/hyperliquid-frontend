@@ -45,6 +45,10 @@ export default function HyperliquidPro() {
   // NOVO FASE 2: Estados para filtros nas abas Positions e Orders
   const [positionsFilter, setPositionsFilter] = useState('all'); // 'all', 'long', 'short'
   const [ordersFilter, setOrdersFilter] = useState('all'); // 'all', 'buy', 'sell'
+  
+  // NOVO: Estados para ordenação da aba Positions
+  const [sortPositionsField, setSortPositionsField] = useState(null);
+  const [sortPositionsDirection, setSortPositionsDirection] = useState('asc');
 
   // Dados de liquidação (SEMPRE VISÍVEIS)
   const liquidationData = {
@@ -297,6 +301,16 @@ export default function HyperliquidPro() {
     }
   };
 
+  // NOVO: Função de ordenação para Positions
+  const handleSortPositions = (field) => {
+    if (sortPositionsField === field) {
+      setSortPositionsDirection(sortPositionsDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortPositionsField(field);
+      setSortPositionsDirection('asc');
+    }
+  };
+
   // Ordenar dados
   const getSortedData = () => {
     if (!sortField) return whalesData;
@@ -367,6 +381,74 @@ export default function HyperliquidPro() {
     }
     
     return positions;
+  };
+
+  // NOVO: Ordenar posições
+  const getSortedPositions = () => {
+    let positions = getFilteredPositions();
+    
+    if (!sortPositionsField) return positions;
+    
+    return [...positions].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortPositionsField) {
+        case 'coin':
+          aValue = a.coin || a.symbol || '';
+          bValue = b.coin || b.symbol || '';
+          break;
+        case 'whale':
+          aValue = a.whaleNickname || '';
+          bValue = b.whaleNickname || '';
+          break;
+        case 'side':
+          const aSzi = parseFloat(a.szi || 0);
+          const bSzi = parseFloat(b.szi || 0);
+          aValue = aSzi > 0 ? 1 : 0;
+          bValue = bSzi > 0 ? 1 : 0;
+          break;
+        case 'size':
+          aValue = Math.abs(parseFloat(a.szi || 0));
+          bValue = Math.abs(parseFloat(b.szi || 0));
+          break;
+        case 'value':
+          aValue = parseFloat(a.positionValue || a.position_value || 0);
+          bValue = parseFloat(b.positionValue || b.position_value || 0);
+          break;
+        case 'pnl':
+          aValue = parseFloat(a.unrealizedPnl || a.unrealized_pnl || 0);
+          bValue = parseFloat(b.unrealizedPnl || b.unrealized_pnl || 0);
+          break;
+        case 'entry':
+          aValue = parseFloat(a.entryPx || a.entry_px || 0);
+          bValue = parseFloat(b.entryPx || b.entry_px || 0);
+          break;
+        case 'liquidation':
+          const aLiqPx = parseFloat(a.liquidationPx || a.liquidation_px || 0);
+          const bLiqPx = parseFloat(b.liquidationPx || b.liquidation_px || 0);
+          const aEntry = parseFloat(a.entryPx || a.entry_px || 0);
+          const bEntry = parseFloat(b.entryPx || b.entry_px || 0);
+          aValue = aLiqPx && aEntry ? Math.abs(((aLiqPx - aEntry) / aEntry) * 100) : 0;
+          bValue = bLiqPx && bEntry ? Math.abs(((bLiqPx - bEntry) / bEntry) * 100) : 0;
+          break;
+        case 'liqPrice':
+          aValue = parseFloat(a.liquidationPx || a.liquidation_px || 0);
+          bValue = parseFloat(b.liquidationPx || b.liquidation_px || 0);
+          break;
+        default:
+          return 0;
+      }
+      
+      if (typeof aValue === 'string') {
+        return sortPositionsDirection === 'asc'
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      } else {
+        return sortPositionsDirection === 'asc'
+          ? aValue - bValue
+          : bValue - aValue;
+      }
+    });
   };
 
   // ============================================
@@ -448,6 +530,15 @@ export default function HyperliquidPro() {
       return <ArrowUpDown className="w-3 h-3 text-slate-500" />;
     }
     return sortDirection === 'asc' 
+      ? <ArrowUp className="w-3 h-3 text-blue-400" />
+      : <ArrowDown className="w-3 h-3 text-blue-400" />;
+  };
+
+  const SortIconPositions = ({ field }) => {
+    if (sortPositionsField !== field) {
+      return <ArrowUpDown className="w-3 h-3 text-slate-500" />;
+    }
+    return sortPositionsDirection === 'asc' 
       ? <ArrowUp className="w-3 h-3 text-blue-400" />
       : <ArrowDown className="w-3 h-3 text-blue-400" />;
   };
@@ -1025,7 +1116,7 @@ export default function HyperliquidPro() {
                 </div>
               </div>
 
-              {getFilteredPositions().length === 0 ? (
+              {getSortedPositions().length === 0 ? (
                 <div className="text-center py-12 text-slate-400">
                   <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>Nenhuma posição aberta no momento</p>
@@ -1033,20 +1124,58 @@ export default function HyperliquidPro() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
+                    <thead className="sticky top-0 bg-slate-800 z-10">
                       <tr className="border-b border-slate-700">
-                        <th className="text-left py-2 px-3 text-slate-400 font-semibold">TOKEN</th>
-                        <th className="text-left py-2 px-3 text-slate-400 font-semibold">WHALE</th>
-                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">LADO</th>
-                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">TAMANHO</th>
-                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">VALOR</th>
-                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">PNL</th>
-                        <th className="text-right py-2 px-3 text-slate-400 font-semibold">LIQUIDAÇÃO</th>
-                        <th className="text-center py-2 px-3 text-slate-400 font-semibold">AÇÕES</th>
+                        <th className="text-left py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('coin')}>
+                            TOKEN <SortIconPositions field="coin" />
+                          </div>
+                        </th>
+                        <th className="text-left py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('whale')}>
+                            WHALE <SortIconPositions field="whale" />
+                          </div>
+                        </th>
+                        <th className="text-center py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-center gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('side')}>
+                            LADO <SortIconPositions field="side" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('size')}>
+                            TAMANHO <SortIconPositions field="size" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('entry')}>
+                            ENTRADA <SortIconPositions field="entry" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('value')}>
+                            VALOR <SortIconPositions field="value" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('pnl')}>
+                            PNL <SortIconPositions field="pnl" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('liqPrice')}>
+                            PREÇO LIQ. <SortIconPositions field="liqPrice" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400 font-semibold">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer hover:text-slate-200" onClick={() => handleSortPositions('liquidation')}>
+                            DIST. LIQ. <SortIconPositions field="liquidation" />
+                          </div>
+                        </th>
+                        <th className="text-center py-3 px-3 text-slate-400 font-semibold">AÇÕES</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredPositions().map((pos, idx) => {
+                      {getSortedPositions().map((pos, idx) => {
                         const coin = pos.coin || pos.symbol || pos.asset || 'N/A';
                         const szi = parseFloat(pos.szi || 0);
                         const side = pos.side || '';
@@ -1087,6 +1216,9 @@ export default function HyperliquidPro() {
                             <td className="text-right py-2 px-3 font-mono">
                               {size.toFixed(4)}
                             </td>
+                            <td className="text-right py-2 px-3 font-mono font-bold text-slate-300">
+                              ${entryPx > 0 ? entryPx.toFixed(2) : '-'}
+                            </td>
                             <td className="text-right py-2 px-3 font-bold">
                               {formatCurrency(posValue)}
                             </td>
@@ -1094,6 +1226,9 @@ export default function HyperliquidPro() {
                               pnl >= 0 ? 'text-green-400' : 'text-red-400'
                             }`}>
                               {formatCurrency(pnl)}
+                            </td>
+                            <td className="text-right py-2 px-3 font-mono font-bold text-yellow-400">
+                              ${liquidationPx > 0 ? liquidationPx.toFixed(2) : '-'}
                             </td>
                             <td className={`text-right py-2 px-3 font-bold ${
                               distLiq < 5 ? 'text-red-400' : distLiq < 15 ? 'text-yellow-400' : 'text-green-400'
@@ -1126,7 +1261,7 @@ export default function HyperliquidPro() {
                   <h3 className="font-bold text-green-400">Posições LONG</h3>
                 </div>
                 <p className="text-3xl font-bold text-green-400">
-                  {getFilteredPositions().filter(p => {
+                  {getSortedPositions().filter(p => {
                     const szi = parseFloat(p.szi || 0);
                     return szi > 0 || (p.side || '').includes('LONG');
                   }).length}
@@ -1139,7 +1274,7 @@ export default function HyperliquidPro() {
                   <h3 className="font-bold text-orange-400">Posições SHORT</h3>
                 </div>
                 <p className="text-3xl font-bold text-orange-400">
-                  {getFilteredPositions().filter(p => {
+                  {getSortedPositions().filter(p => {
                     const szi = parseFloat(p.szi || 0);
                     return szi < 0 || (p.side || '').includes('SHORT');
                   }).length}
@@ -1153,7 +1288,7 @@ export default function HyperliquidPro() {
                 </div>
                 <p className="text-3xl font-bold text-blue-400">
                   {formatCurrency(
-                    getFilteredPositions().reduce((sum, p) => 
+                    getSortedPositions().reduce((sum, p) => 
                       sum + (parseFloat(p.positionValue || p.position_value || 0)), 0
                     )
                   )}
