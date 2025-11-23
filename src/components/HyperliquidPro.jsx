@@ -1,6 +1,7 @@
 // ============================================
-// HYPERLIQUID PRO TRACKER - FASE 3 COMPLETA
-// PARTE 1 DE 3 - Cole esta parte PRIMEIRO
+// HYPERLIQUID PRO TRACKER - REORGANIZADO
+// PARTE 1 DE 3 - ABA COMMAND COMPLETA + POSITIONS
+// Cole esta parte PRIMEIRO
 // ============================================
 
 import React, { useState, useEffect } from 'react';
@@ -47,11 +48,6 @@ export default function HyperliquidPro() {
   const [sortPositionsField, setSortPositionsField] = useState(null);
   const [sortPositionsDirection, setSortPositionsDirection] = useState('asc');
 
-  const [tokenFilter, setTokenFilter] = useState('all');
-  const [tokenSortField, setTokenSortField] = useState('confidence');
-  const [tokenSortDirection, setTokenSortDirection] = useState('desc');
-  const [expandedTokenDetail, setExpandedTokenDetail] = useState(null);
-
   const liquidationData = {
     '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
     '1W': { total: 8920000, trades: 67, profit: 1890000, longs: 42, shorts: 25 },
@@ -67,7 +63,7 @@ export default function HyperliquidPro() {
   };
 
   // ============================================
-  // FORMATAÇÃO COM VALORES EXATOS (SEM ABREVIAÇÃO)
+  // FORMATAÇÃO - VALORES EXATOS
   // ============================================
   
   const formatCurrencyExact = (value) => {
@@ -353,136 +349,6 @@ export default function HyperliquidPro() {
     return orders;
   };
 
-  // ============================================
-  // FASE 3: ANÁLISE AVANÇADA COM CONFIDENCE SCORE
-  // ============================================
-  
-  const calculateTokenMetrics = (tokenData) => {
-    const { positions } = tokenData;
-    
-    const avgSize = tokenData.totalVolume / positions.length;
-    
-    const leverages = positions.map(p => p.leverage?.value || p.leverage || 1).filter(l => l > 0);
-    const avgLeverage = leverages.length > 0 ? leverages.reduce((s, l) => s + l, 0) / leverages.length : 1;
-    
-    const volumeByWhale = {};
-    positions.forEach(pos => {
-      const addr = pos.whaleAddress;
-      const val = parseFloat(pos.positionValue || pos.position_value || 0);
-      volumeByWhale[addr] = (volumeByWhale[addr] || 0) + val;
-    });
-    const volumes = Object.values(volumeByWhale).sort((a, b) => b - a);
-    const top2Volume = (volumes[0] || 0) + (volumes[1] || 0);
-    const concentration = tokenData.totalVolume > 0 ? (top2Volume / tokenData.totalVolume) * 100 : 0;
-    
-    const liquidationDistances = positions.map(pos => {
-      const liqPx = parseFloat(pos.liquidationPx || pos.liquidation_px || 0);
-      const entryPx = parseFloat(pos.entryPx || pos.entry_px || 0);
-      return liqPx && entryPx ? Math.abs(((liqPx - entryPx) / entryPx) * 100) : 0;
-    }).filter(d => d > 0);
-    
-    const avgLiquidationDistance = liquidationDistances.length > 0
-      ? liquidationDistances.reduce((s, d) => s + d, 0) / liquidationDistances.length : 0;
-    
-    const nearLiquidation = liquidationDistances.filter(d => d < 10).length;
-    const cascadeRisk = liquidationDistances.length > 0 ? (nearLiquidation / liquidationDistances.length) * 100 : 0;
-    
-    const entryPrices = positions.map(pos => parseFloat(pos.entryPx || pos.entry_px || 0)).filter(p => p > 0);
-    const avgEntryPrice = entryPrices.length > 0 ? entryPrices.reduce((s, p) => s + p, 0) / entryPrices.length : 0;
-    
-    const currentPrice = positions.find(p => p.markPx)?.markPx || avgEntryPrice;
-    const avgProfitPct = currentPrice && avgEntryPrice ? ((currentPrice - avgEntryPrice) / avgEntryPrice) * 100 : 0;
-    const portfolioPercent = (tokenData.totalVolume / 10000000) * 100;
-    
-    let confidence = 50;
-    const consensusStrength = Math.max(tokenData.longs, tokenData.shorts) / (tokenData.longs + tokenData.shorts);
-    if (consensusStrength > 0.75) confidence += 20;
-    else if (consensusStrength > 0.65) confidence += 10;
-    if (tokenData.totalPnL > 0) confidence += 15;
-    else if (tokenData.totalPnL < 0) confidence -= 10;
-    if (avgLiquidationDistance > 15) confidence += 10;
-    else if (avgLiquidationDistance < 5) confidence -= 15;
-    if (tokenData.whaleCount >= 5) confidence += 10;
-    else if (tokenData.whaleCount <= 2) confidence -= 5;
-    if (concentration < 50) confidence += 10;
-    else if (concentration > 80) confidence -= 10;
-    if (tokenData.totalVolume > 1000000) confidence += 5;
-    confidence = Math.max(0, Math.min(100, confidence));
-    
-    let signal = 'HOLD', signalColor = 'yellow', signalIcon = '⏸️';
-    if (confidence >= 80 && tokenData.totalPnL > 0) {
-      signal = 'STRONG BUY'; signalColor = 'green'; signalIcon = '🟢';
-    } else if (confidence >= 65 && tokenData.totalPnL >= 0) {
-      signal = 'BUY'; signalColor = 'green'; signalIcon = '🟢';
-    } else if (confidence <= 35 && tokenData.totalPnL < 0) {
-      signal = 'STRONG SELL'; signalColor = 'red'; signalIcon = '🔴';
-    } else if (confidence <= 50 && tokenData.totalPnL < 0) {
-      signal = 'SELL'; signalColor = 'orange'; signalIcon = '🟠';
-    }
-    
-    return { avgSize, avgLeverage, concentration, avgLiquidationDistance, cascadeRisk, avgEntryPrice, currentPrice, avgProfitPct, portfolioPercent, confidence, signal, signalColor, signalIcon, momentum: 'STABLE' };
-  };
-  
-  const getTokensAggregated = () => {
-    const tokenMap = new Map();
-    whalesData.forEach(whale => {
-      const positions = whale.positions || whale.active_positions || [];
-      const nickname = whale.nickname || `Whale ${whale.address.slice(0, 6)}`;
-      positions.forEach(pos => {
-        const coin = pos.coin || pos.symbol || 'UNKNOWN';
-        const szi = parseFloat(pos.szi || 0);
-        const isLong = szi > 0;
-        const posValue = parseFloat(pos.positionValue || pos.position_value || 0);
-        const pnl = parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0);
-        
-        if (!tokenMap.has(coin)) {
-          tokenMap.set(coin, { coin, whales: new Set(), longs: 0, shorts: 0, totalVolume: 0, totalPnL: 0, positions: [] });
-        }
-        
-        const tokenData = tokenMap.get(coin);
-        tokenData.whales.add(whale.address);
-        if (isLong) tokenData.longs++; else tokenData.shorts++;
-        tokenData.totalVolume += posValue;
-        tokenData.totalPnL += pnl;
-        tokenData.positions.push({ ...pos, whaleAddress: whale.address, whaleNickname: nickname, isLong });
-      });
-    });
-    
-    return Array.from(tokenMap.values()).map(token => {
-      const whaleCount = token.whales.size;
-      const consensus = token.longs > token.shorts ? 'LONG' : token.shorts > token.longs ? 'SHORT' : 'MIXED';
-      const metrics = calculateTokenMetrics(token);
-      return { ...token, whaleCount, consensus, ...metrics };
-    });
-  };
-
-  const getFilteredTokens = () => {
-    let tokens = getTokensAggregated();
-    if (tokenFilter === 'long') tokens = tokens.filter(t => t.longs > t.shorts);
-    else if (tokenFilter === 'short') tokens = tokens.filter(t => t.shorts > t.longs);
-    else if (tokenFilter === 'mixed') tokens = tokens.filter(t => Math.abs(t.longs - t.shorts) <= 1);
-    return tokens;
-  };
-
-  const getSortedTokens = () => {
-    let tokens = getFilteredTokens();
-    return [...tokens].sort((a, b) => {
-      let aValue, bValue;
-      switch (tokenSortField) {
-        case 'confidence': aValue = a.confidence; bValue = b.confidence; break;
-        case 'popularity': aValue = a.whaleCount; bValue = b.whaleCount; break;
-        case 'volume': aValue = a.totalVolume; bValue = b.totalVolume; break;
-        case 'pnl': aValue = a.totalPnL; bValue = b.totalPnL; break;
-        case 'name': aValue = a.coin; bValue = b.coin; break;
-        default: aValue = a.confidence; bValue = b.confidence;
-      }
-      if (typeof aValue === 'string') {
-        return tokenSortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-      }
-      return tokenSortDirection === 'asc' ? aValue - bValue : bValue - aValue;
-    });
-  };
-
   useEffect(() => {
     fetchWhales();
     checkTelegramStatus();
@@ -534,15 +400,6 @@ export default function HyperliquidPro() {
   const longPercentage = totalTrades > 0 ? ((longShortMetrics.totalLongs / totalTrades) * 100).toFixed(0) : 0;
   const shortPercentage = totalTrades > 0 ? ((longShortMetrics.totalShorts / totalTrades) * 100).toFixed(0) : 0;
   const sortedData = getSortedData();
-
-  // ============================================
-  // FIM DA PARTE 1 DE 3
-  // Continue com a PARTE 2
-  // ============================================
-// ============================================
-  // PARTE 2 DE 3 - Cole esta parte DEPOIS da Parte 1
-  // Renderização: Header + Abas Command, Positions, Orders
-  // ============================================
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white" style={{ scrollbarWidth: 'thin', scrollbarColor: '#6366f1 #1e293b' }}>
@@ -900,6 +757,16 @@ export default function HyperliquidPro() {
           </div>
         )}
 
+        {/* ============================================ */}
+        {/* FIM DA PARTE 1 DE 3 */}
+        {/* Continue com a PARTE 2 (Orders) */}
+        {/* ============================================ */}
+
+        {/* ============================================ */}
+        {/* PARTE 2 DE 3 - ABA ORDERS COMPLETA */}
+        {/* Cole esta parte DEPOIS da Parte 1 */}
+        {/* ============================================ */}
+
         {tab === 'orders' && (
           <div className="space-y-4">
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
@@ -964,362 +831,6 @@ export default function HyperliquidPro() {
                   </table>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* ============================================ */}
-        {/* FIM DA PARTE 2 DE 3 */}
-        {/* Continue com a PARTE 3 (Aba AI Token + Modais) */}
-        {/* ============================================ */}
-
-        {/* ============================================ */}
-        {/* PARTE 3 DE 3 - FINAL - Cole esta parte DEPOIS da Parte 2 */}
-        {/* Aba AI Token + Outras Abas + Modais */}
-        {/* ============================================ */}
-
-        {tab === 'ai-token' && (
-          <div className="space-y-4">
-            <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Brain className="w-6 h-6 text-purple-400" />
-                    🤖 Análise Agregada por Token com IA
-                  </h2>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {getSortedTokens().length} tokens com posições abertas • Confidence Score Ativo
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <select
-                    value={tokenSortField}
-                    onChange={(e) => setTokenSortField(e.target.value)}
-                    className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm"
-                  >
-                    <option value="confidence">Confidence Score</option>
-                    <option value="popularity">Popularidade</option>
-                    <option value="volume">Volume</option>
-                    <option value="pnl">PnL</option>
-                    <option value="name">Nome</option>
-                  </select>
-                  <button
-                    onClick={() => setTokenSortDirection(tokenSortDirection === 'asc' ? 'desc' : 'asc')}
-                    className="bg-slate-800 border border-slate-600 rounded px-3 py-2"
-                  >
-                    {tokenSortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setTokenFilter('all')}
-                  className={`px-4 py-2 rounded text-sm font-medium ${
-                    tokenFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  Todos ({getTokensAggregated().length})
-                </button>
-                <button
-                  onClick={() => setTokenFilter('long')}
-                  className={`px-4 py-2 rounded text-sm font-medium ${
-                    tokenFilter === 'long' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  🟢 Maioria LONG ({getTokensAggregated().filter(t => t.longs > t.shorts).length})
-                </button>
-                <button
-                  onClick={() => setTokenFilter('short')}
-                  className={`px-4 py-2 rounded text-sm font-medium ${
-                    tokenFilter === 'short' ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  🔴 Maioria SHORT ({getTokensAggregated().filter(t => t.shorts > t.longs).length})
-                </button>
-                <button
-                  onClick={() => setTokenFilter('mixed')}
-                  className={`px-4 py-2 rounded text-sm font-medium ${
-                    tokenFilter === 'mixed' ? 'bg-yellow-600 text-white' : 'bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  ⚖️ Divididos ({getTokensAggregated().filter(t => Math.abs(t.longs - t.shorts) <= 1).length})
-                </button>
-              </div>
-
-              {getSortedTokens().length === 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                  <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Nenhum token encontrado com os filtros selecionados</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {getSortedTokens().map(token => {
-                    const isExpanded = expandedTokenDetail === token.coin;
-                    const stars = Math.round((token.confidence / 100) * 5);
-                    
-                    return (
-                      <div key={token.coin} className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
-                        <div
-                          className="p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
-                          onClick={() => setExpandedTokenDetail(isExpanded ? null : token.coin)}
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <h3 className="text-xl font-bold text-blue-400">{token.coin}</h3>
-                              <div className="flex items-center gap-1">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star
-                                    key={i}
-                                    className={`w-4 h-4 ${i < stars ? 'text-yellow-400 fill-yellow-400' : 'text-slate-600'}`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <div className="text-xs text-slate-400">Confidence Score</div>
-                                <div className={`text-2xl font-bold ${
-                                  token.confidence >= 80 ? 'text-green-400' :
-                                  token.confidence >= 65 ? 'text-blue-400' :
-                                  token.confidence >= 50 ? 'text-yellow-400' :
-                                  token.confidence >= 35 ? 'text-orange-400' : 'text-red-400'
-                                }`}>
-                                  {token.confidence}
-                                </div>
-                              </div>
-                              <div className={`px-4 py-2 rounded-lg font-bold text-sm ${
-                                token.signalColor === 'green' ? 'bg-green-500/20 text-green-400' :
-                                token.signalColor === 'orange' ? 'bg-orange-500/20 text-orange-400' :
-                                token.signalColor === 'red' ? 'bg-red-500/20 text-red-400' :
-                                'bg-yellow-500/20 text-yellow-400'
-                              }`}>
-                                {token.signalIcon} {token.signal}
-                              </div>
-                              {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-6 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Users className="w-4 h-4 text-slate-400" />
-                              <span className="text-slate-300">{token.whaleCount} whales</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <BarChart3 className="w-4 h-4 text-slate-400" />
-                              <span className="text-slate-300">{token.positions.length} posições</span>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 pt-3 border-t border-slate-700">
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <div className="text-slate-400 text-xs mb-1">Consenso</div>
-                                <div className={`font-bold ${
-                                  token.consensus === 'LONG' ? 'text-green-400' :
-                                  token.consensus === 'SHORT' ? 'text-orange-400' : 'text-yellow-400'
-                                }`}>
-                                  {token.consensus === 'LONG' ? '🟢' : token.consensus === 'SHORT' ? '🔴' : '⚖️'} {token.consensus} ({token.longs}L / {token.shorts}S)
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-slate-400 text-xs mb-1">Volume Total</div>
-                                <div className="font-bold text-blue-400">{formatCurrencyExact(token.totalVolume)}</div>
-                              </div>
-                              <div>
-                                <div className="text-slate-400 text-xs mb-1">PnL Agregado</div>
-                                <div className={`font-bold ${token.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {formatCurrencyExact(token.totalPnL)} ({token.avgProfitPct >= 0 ? '+' : ''}{token.avgProfitPct.toFixed(2)}%)
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 text-xs text-slate-400 flex items-center gap-2">
-                            <span>{isExpanded ? '▲' : '▼'} Clique para {isExpanded ? 'ocultar' : 'expandir'} análise detalhada</span>
-                          </div>
-                        </div>
-
-                        {isExpanded && (
-                          <div className="border-t border-slate-700 p-4 bg-slate-900/50 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                                <h4 className="text-sm font-bold text-purple-400 mb-3 flex items-center gap-2">
-                                  <Zap className="w-4 h-4" />
-                                  📊 Análise Detalhada
-                                </h4>
-                                <div className="space-y-2 text-sm">
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">💪 Força da Posição:</span>
-                                    <span className="font-bold text-blue-400">
-                                      {formatCurrencyExact(token.avgSize)} {token.avgSize > 500000 ? '🔥 ALTO' : token.avgSize > 100000 ? '📈 MÉDIO' : '📊 BAIXO'}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">⚡ Alavancagem Média:</span>
-                                    <span className="font-bold text-yellow-400">
-                                      {token.avgLeverage.toFixed(1)}x {token.avgLeverage > 5 ? '🔴 ALTO' : token.avgLeverage > 3 ? '🟡 MODERADO' : '🟢 BAIXO'}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">📊 Concentração:</span>
-                                    <span className="font-bold text-purple-400">
-                                      {token.concentration.toFixed(0)}% {token.concentration > 70 ? '🔴 ALTO' : token.concentration > 50 ? '🟡 MÉDIO' : '🟢 DISTRIBUÍDO'}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">🛡️ Distância Liquidação:</span>
-                                    <span className={`font-bold ${token.avgLiquidationDistance > 15 ? 'text-green-400' : token.avgLiquidationDistance > 10 ? 'text-yellow-400' : 'text-red-400'}`}>
-                                      {token.avgLiquidationDistance.toFixed(1)}% {token.avgLiquidationDistance > 15 ? '🟢 SEGURO' : token.avgLiquidationDistance > 10 ? '🟡 MÉDIO' : '🔴 RISCO'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                                <h4 className="text-sm font-bold text-orange-400 mb-3 flex items-center gap-2">
-                                  <Shield className="w-4 h-4" />
-                                  ⚠️ Análise de Risco
-                                </h4>
-                                <div className="space-y-2 text-sm">
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">Risco Cascata:</span>
-                                    <span className={`font-bold ${token.cascadeRisk < 20 ? 'text-green-400' : token.cascadeRisk < 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                                      {token.cascadeRisk.toFixed(0)}% {token.cascadeRisk < 20 ? '🟢 BAIXO' : token.cascadeRisk < 40 ? '🟡 MÉDIO' : '🔴 ALTO'}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">% Portfolio:</span>
-                                    <span className="font-bold text-cyan-400">{token.portfolioPercent.toFixed(1)}%</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">Momentum:</span>
-                                    <span className="font-bold text-blue-400">{token.momentum}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/30">
-                              <h4 className="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">
-                                <DollarSign className="w-4 h-4" />
-                                💡 Análise de Preço
-                              </h4>
-                              <div className="grid grid-cols-3 gap-4 text-sm mb-3">
-                                <div>
-                                  <div className="text-slate-400 text-xs mb-1">Preço Atual</div>
-                                  <div className="font-bold text-white">${token.currentPrice.toFixed(2)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-slate-400 text-xs mb-1">Preço Médio Whales</div>
-                                  <div className="font-bold text-blue-400">${token.avgEntryPrice.toFixed(2)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-slate-400 text-xs mb-1">Lucro Médio</div>
-                                  <div className={`font-bold ${token.avgProfitPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {token.avgProfitPct >= 0 ? '+' : ''}{token.avgProfitPct.toFixed(2)}%
-                                  </div>
-                                </div>
-                              </div>
-                              <div className={`text-xs p-3 rounded ${token.avgProfitPct >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                                {token.avgProfitPct >= 0 ? '✅' : '⚠️'} {token.avgProfitPct >= 0
-                                  ? `Whales estão em lucro. Você entraria $${(token.currentPrice - token.avgEntryPrice).toFixed(2)} acima delas.`
-                                  : `Whales estão em prejuízo. Você entraria $${Math.abs(token.currentPrice - token.avgEntryPrice).toFixed(2)} abaixo delas.`}
-                              </div>
-                            </div>
-
-                            <div className={`rounded-lg p-4 border ${
-                              token.signalColor === 'green' ? 'bg-green-500/10 border-green-500/30' :
-                              token.signalColor === 'orange' ? 'bg-orange-500/10 border-orange-500/30' :
-                              token.signalColor === 'red' ? 'bg-red-500/10 border-red-500/30' :
-                              'bg-yellow-500/10 border-yellow-500/30'
-                            }`}>
-                              <h4 className="text-sm font-bold mb-2 flex items-center gap-2">
-                                {token.signalIcon} RECOMENDAÇÃO: {token.signal}
-                              </h4>
-                              <p className="text-xs text-slate-300">
-                                {token.signal === 'STRONG BUY' && 'Alto consenso, baixo risco, PnL positivo. Posição favorável para copiar.'}
-                                {token.signal === 'BUY' && 'Consenso favorável com risco aceitável. Considere entrar com cautela.'}
-                                {token.signal === 'HOLD' && 'Sinais mistos. Aguarde melhor momento para entrada.'}
-                                {token.signal === 'SELL' && 'Consenso fraco com risco aumentado. Evite entrar ou considere sair.'}
-                                {token.signal === 'STRONG SELL' && 'Alto risco, baixo consenso, PnL negativo. Não recomendado.'}
-                              </p>
-                            </div>
-
-                            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                              <h4 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
-                                <Activity className="w-4 h-4" />
-                                📋 Posições Individuais ({token.positions.length})
-                              </h4>
-                              <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {token.positions.map((pos, idx) => (
-                                  <div key={idx} className="bg-slate-900/50 rounded p-3 text-xs border border-slate-700/50">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="flex items-center gap-2">
-                                        <span className={`px-2 py-1 rounded font-bold ${pos.isLong ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
-                                          {pos.isLong ? '🟢 LONG' : '🔴 SHORT'}
-                                        </span>
-                                        <span className="font-semibold text-white">{pos.whaleNickname}</span>
-                                        <span className="text-slate-500 font-mono">{pos.whaleAddress.slice(0, 6)}...{pos.whaleAddress.slice(-4)}</span>
-                                      </div>
-                                      <a href={`https://hypurrscan.io/address/${pos.whaleAddress}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
-                                        <ExternalLink className="w-3 h-3" />
-                                      </a>
-                                    </div>
-                                    <div className="grid grid-cols-4 gap-2 text-xs">
-                                      <div>
-                                        <div className="text-slate-500">Tamanho</div>
-                                        <div className="text-white font-bold">{Math.abs(parseFloat(pos.szi || 0)).toFixed(4)}</div>
-                                      </div>
-                                      <div>
-                                        <div className="text-slate-500">Valor</div>
-                                        <div className="text-blue-400 font-bold">{formatCurrencyExact(parseFloat(pos.positionValue || pos.position_value || 0))}</div>
-                                      </div>
-                                      <div>
-                                        <div className="text-slate-500">PnL</div>
-                                        <div className={`font-bold ${parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                          {formatCurrencyExact(parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0))}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <div className="text-slate-500">Entrada</div>
-                                        <div className="text-white font-mono">${parseFloat(pos.entryPx || pos.entry_px || 0).toFixed(2)}</div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
-                <p className="text-slate-400 text-xs mb-1">Tokens Únicos</p>
-                <p className="text-2xl font-bold text-purple-400">{getTokensAggregated().length}</p>
-              </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
-                <p className="text-slate-400 text-xs mb-1">Consenso LONG</p>
-                <p className="text-2xl font-bold text-green-400">{getTokensAggregated().filter(t => t.longs > t.shorts).length}</p>
-              </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
-                <p className="text-slate-400 text-xs mb-1">Consenso SHORT</p>
-                <p className="text-2xl font-bold text-orange-400">{getTokensAggregated().filter(t => t.shorts > t.longs).length}</p>
-              </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
-                <p className="text-slate-400 text-xs mb-1">Divididos</p>
-                <p className="text-2xl font-bold text-yellow-400">{getTokensAggregated().filter(t => Math.abs(t.longs - t.shorts) <= 1).length}</p>
-              </div>
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
-                <p className="text-slate-400 text-xs mb-1">High Confidence</p>
-                <p className="text-2xl font-bold text-cyan-400">{getTokensAggregated().filter(t => t.confidence >= 80).length}</p>
-              </div>
             </div>
           </div>
         )}
@@ -1474,6 +985,581 @@ export default function HyperliquidPro() {
 }
 
 {/* ============================================ */}
-{/* FIM DA PARTE 3 DE 3 */}
+{/* FIM DA PARTE 2 DE 3 */}
+{/* Continue com a PARTE 3 (AI Token) */}
+{/* ============================================ */}
+
+{/* ============================================ */}
+        {/* PARTE 3 DE 3 - ABA AI TOKEN (ISOLADA) */}
+        {/* Cole esta parte DEPOIS da Parte 2 */}
+        {/* APENAS ESTA PARTE SERÁ AJUSTADA NO FUTURO */}
+        {/* ============================================ */}
+
+        {/* ESTADOS ADICIONAIS PARA AI TOKEN (adicione no início do componente, logo após os outros estados) */}
+        {/* 
+        const [tokenFilter, setTokenFilter] = useState('all');
+        const [tokenSortField, setTokenSortField] = useState('confidence');
+        const [tokenSortDirection, setTokenSortDirection] = useState('desc');
+        const [expandedTokenDetail, setExpandedTokenDetail] = useState(null);
+        */}
+
+        {/* FUNÇÕES DE ANÁLISE AI TOKEN (adicione antes do return) */}
+        {/*
+        
+        const calculateTokenMetrics = (tokenData) => {
+          const { positions } = tokenData;
+          
+          // Tamanho médio das posições
+          const avgSize = tokenData.totalVolume / positions.length;
+          
+          // Alavancagem média REAL das posições
+          const leverages = positions.map(p => p.leverage?.value || p.leverage || 1).filter(l => l > 0);
+          const avgLeverage = leverages.length > 0 ? leverages.reduce((s, l) => s + l, 0) / leverages.length : 1;
+          
+          // Concentração: % do volume nas top 2 whales
+          const volumeByWhale = {};
+          positions.forEach(pos => {
+            const addr = pos.whaleAddress;
+            const val = parseFloat(pos.positionValue || pos.position_value || 0);
+            volumeByWhale[addr] = (volumeByWhale[addr] || 0) + val;
+          });
+          const volumes = Object.values(volumeByWhale).sort((a, b) => b - a);
+          const top2Volume = (volumes[0] || 0) + (volumes[1] || 0);
+          const concentration = tokenData.totalVolume > 0 ? (top2Volume / tokenData.totalVolume) * 100 : 0;
+          
+          // Distância média até liquidação
+          const liquidationDistances = positions.map(pos => {
+            const liqPx = parseFloat(pos.liquidationPx || pos.liquidation_px || 0);
+            const entryPx = parseFloat(pos.entryPx || pos.entry_px || 0);
+            return liqPx && entryPx ? Math.abs(((liqPx - entryPx) / entryPx) * 100) : 0;
+          }).filter(d => d > 0);
+          
+          const avgLiquidationDistance = liquidationDistances.length > 0
+            ? liquidationDistances.reduce((s, d) => s + d, 0) / liquidationDistances.length : 0;
+          
+          // Risco de cascata: % de posições perto da liquidação
+          const nearLiquidation = liquidationDistances.filter(d => d < 10).length;
+          const cascadeRisk = liquidationDistances.length > 0 ? (nearLiquidation / liquidationDistances.length) * 100 : 0;
+          
+          // Preço médio de entrada das whales
+          const entryPrices = positions.map(pos => parseFloat(pos.entryPx || pos.entry_px || 0)).filter(p => p > 0);
+          const avgEntryPrice = entryPrices.length > 0 ? entryPrices.reduce((s, p) => s + p, 0) / entryPrices.length : 0;
+          
+          // Preço atual (usa markPx da primeira posição disponível)
+          const currentPrice = positions.find(p => p.markPx)?.markPx || avgEntryPrice;
+          
+          // Lucro % médio
+          const avgProfitPct = currentPrice && avgEntryPrice ? ((currentPrice - avgEntryPrice) / avgEntryPrice) * 100 : 0;
+          
+          // % do portfolio (mockado por enquanto, precisa do total real)
+          const portfolioPercent = (tokenData.totalVolume / 10000000) * 100;
+          
+          // ======================================
+          // CONFIDENCE SCORE: 0-100 (100% BASEADO EM DADOS REAIS)
+          // ======================================
+          let confidence = 50; // Base
+          
+          // Consenso
+          const consensusStrength = Math.max(tokenData.longs, tokenData.shorts) / (tokenData.longs + tokenData.shorts);
+          if (consensusStrength > 0.75) confidence += 20;
+          else if (consensusStrength > 0.65) confidence += 10;
+          
+          // PnL
+          if (tokenData.totalPnL > 0) confidence += 15;
+          else if (tokenData.totalPnL < 0) confidence -= 10;
+          
+          // Distância de liquidação
+          if (avgLiquidationDistance > 15) confidence += 10;
+          else if (avgLiquidationDistance < 5) confidence -= 15;
+          
+          // Diversidade de whales
+          if (tokenData.whaleCount >= 5) confidence += 10;
+          else if (tokenData.whaleCount <= 2) confidence -= 5;
+          
+          // Concentração
+          if (concentration < 50) confidence += 10;
+          else if (concentration > 80) confidence -= 10;
+          
+          // Volume significativo
+          if (tokenData.totalVolume > 1000000) confidence += 5;
+          
+          confidence = Math.max(0, Math.min(100, confidence));
+          
+          // ======================================
+          // SINAL DE AÇÃO
+          // ======================================
+          let signal = 'HOLD', signalColor = 'yellow', signalIcon = '⏸️';
+          
+          if (confidence >= 80 && tokenData.totalPnL > 0) {
+            signal = 'STRONG BUY'; signalColor = 'green'; signalIcon = '🟢';
+          } else if (confidence >= 65 && tokenData.totalPnL >= 0) {
+            signal = 'BUY'; signalColor = 'green'; signalIcon = '🟢';
+          } else if (confidence <= 35 && tokenData.totalPnL < 0) {
+            signal = 'STRONG SELL'; signalColor = 'red'; signalIcon = '🔴';
+          } else if (confidence <= 50 && tokenData.totalPnL < 0) {
+            signal = 'SELL'; signalColor = 'orange'; signalIcon = '🟠';
+          }
+          
+          return { 
+            avgSize, 
+            avgLeverage, 
+            concentration, 
+            avgLiquidationDistance, 
+            cascadeRisk, 
+            avgEntryPrice, 
+            currentPrice, 
+            avgProfitPct, 
+            portfolioPercent, 
+            confidence, 
+            signal, 
+            signalColor, 
+            signalIcon, 
+            momentum: 'STABLE' 
+          };
+        };
+        
+        const getTokensAggregated = () => {
+          const tokenMap = new Map();
+          
+          whalesData.forEach(whale => {
+            const positions = whale.positions || whale.active_positions || [];
+            const nickname = whale.nickname || `Whale ${whale.address.slice(0, 6)}`;
+            
+            positions.forEach(pos => {
+              const coin = pos.coin || pos.symbol || 'UNKNOWN';
+              const szi = parseFloat(pos.szi || 0);
+              const isLong = szi > 0;
+              const posValue = parseFloat(pos.positionValue || pos.position_value || 0);
+              const pnl = parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0);
+              
+              if (!tokenMap.has(coin)) {
+                tokenMap.set(coin, { 
+                  coin, 
+                  whales: new Set(), 
+                  longs: 0, 
+                  shorts: 0, 
+                  totalVolume: 0, 
+                  totalPnL: 0, 
+                  positions: [] 
+                });
+              }
+              
+              const tokenData = tokenMap.get(coin);
+              tokenData.whales.add(whale.address);
+              if (isLong) tokenData.longs++; else tokenData.shorts++;
+              tokenData.totalVolume += posValue;
+              tokenData.totalPnL += pnl;
+              tokenData.positions.push({ 
+                ...pos, 
+                whaleAddress: whale.address, 
+                whaleNickname: nickname, 
+                isLong 
+              });
+            });
+          });
+          
+          return Array.from(tokenMap.values()).map(token => {
+            const whaleCount = token.whales.size;
+            const consensus = token.longs > token.shorts ? 'LONG' : token.shorts > token.longs ? 'SHORT' : 'MIXED';
+            const metrics = calculateTokenMetrics(token);
+            return { ...token, whaleCount, consensus, ...metrics };
+          });
+        };
+
+        const getFilteredTokens = () => {
+          let tokens = getTokensAggregated();
+          if (tokenFilter === 'long') tokens = tokens.filter(t => t.longs > t.shorts);
+          else if (tokenFilter === 'short') tokens = tokens.filter(t => t.shorts > t.longs);
+          else if (tokenFilter === 'mixed') tokens = tokens.filter(t => Math.abs(t.longs - t.shorts) <= 1);
+          return tokens;
+        };
+
+        const getSortedTokens = () => {
+          let tokens = getFilteredTokens();
+          return [...tokens].sort((a, b) => {
+            let aValue, bValue;
+            switch (tokenSortField) {
+              case 'confidence': aValue = a.confidence; bValue = b.confidence; break;
+              case 'popularity': aValue = a.whaleCount; bValue = b.whaleCount; break;
+              case 'volume': aValue = a.totalVolume; bValue = b.totalVolume; break;
+              case 'pnl': aValue = a.totalPnL; bValue = b.totalPnL; break;
+              case 'name': aValue = a.coin; bValue = b.coin; break;
+              default: aValue = a.confidence; bValue = b.confidence;
+            }
+            if (typeof aValue === 'string') {
+              return tokenSortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+            }
+            return tokenSortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+          });
+        };
+        
+        */}
+
+{/* ============================================ */}
+{/* RENDER DA ABA AI TOKEN */}
+{/* ============================================ */}
+
+{tab === 'ai-token' && (
+  <div className="space-y-4">
+    <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Brain className="w-6 h-6 text-purple-400" />
+            🤖 Análise Agregada por Token com IA
+          </h2>
+          <p className="text-sm text-slate-400 mt-1">
+            📊 ATENÇÃO: VALORES SÃO 100% REAIS DA API! Atualização a cada 30 segundos
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <select
+            value={tokenSortField || 'confidence'}
+            onChange={(e) => typeof setTokenSortField !== 'undefined' && setTokenSortField(e.target.value)}
+            className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm"
+          >
+            <option value="confidence">Confidence Score</option>
+            <option value="popularity">Popularidade</option>
+            <option value="volume">Volume</option>
+            <option value="pnl">PnL</option>
+            <option value="name">Nome</option>
+          </select>
+          <button
+            onClick={() => typeof setTokenSortDirection !== 'undefined' && setTokenSortDirection((tokenSortDirection || 'desc') === 'asc' ? 'desc' : 'asc')}
+            className="bg-slate-800 border border-slate-600 rounded px-3 py-2"
+          >
+            {(tokenSortDirection || 'desc') === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => typeof setTokenFilter !== 'undefined' && setTokenFilter('all')}
+          className={`px-4 py-2 rounded text-sm font-medium ${
+            (tokenFilter || 'all') === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'
+          }`}
+        >
+          Todos
+        </button>
+        <button
+          onClick={() => typeof setTokenFilter !== 'undefined' && setTokenFilter('long')}
+          className={`px-4 py-2 rounded text-sm font-medium ${
+            tokenFilter === 'long' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-300'
+          }`}
+        >
+          🟢 Maioria LONG
+        </button>
+        <button
+          onClick={() => typeof setTokenFilter !== 'undefined' && setTokenFilter('short')}
+          className={`px-4 py-2 rounded text-sm font-medium ${
+            tokenFilter === 'short' ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'
+          }`}
+        >
+          🔴 Maioria SHORT
+        </button>
+        <button
+          onClick={() => typeof setTokenFilter !== 'undefined' && setTokenFilter('mixed')}
+          className={`px-4 py-2 rounded text-sm font-medium ${
+            tokenFilter === 'mixed' ? 'bg-yellow-600 text-white' : 'bg-slate-700 text-slate-300'
+          }`}
+        >
+          ⚖️ Divididos
+        </button>
+      </div>
+
+      <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-3 mb-4 text-sm">
+        <p className="text-yellow-300 font-bold">⚠️ NOTA IMPORTANTE:</p>
+        <p className="text-yellow-200 text-xs mt-1">
+          Esta aba usa <strong>dados 100% REAIS da API</strong>. O Confidence Score é calculado dinamicamente baseado em: consenso, PnL, liquidação, diversidade e concentração. Se você vê números repetidos, é porque múltiplas whales entraram no mesmo preço!
+        </p>
+      </div>
+
+      {typeof getSortedTokens === 'undefined' ? (
+        <div className="text-center py-12 text-slate-400">
+          <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>⚠️ Funções de análise não carregadas. Descomente as funções no código!</p>
+        </div>
+      ) : getSortedTokens().length === 0 ? (
+        <div className="text-center py-12 text-slate-400">
+          <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>Nenhum token encontrado</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {getSortedTokens().map(token => {
+            const isExpanded = expandedTokenDetail === token.coin;
+            const stars = Math.round((token.confidence / 100) * 5);
+            
+            return (
+              <div key={token.coin} className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
+                <div
+                  className="p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
+                  onClick={() => typeof setExpandedTokenDetail !== 'undefined' && setExpandedTokenDetail(isExpanded ? null : token.coin)}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-xl font-bold text-blue-400">{token.coin}</h3>
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-4 h-4 ${i < stars ? 'text-yellow-400 fill-yellow-400' : 'text-slate-600'}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-xs text-slate-400">Confidence Score</div>
+                        <div className={`text-2xl font-bold ${
+                          token.confidence >= 80 ? 'text-green-400' :
+                          token.confidence >= 65 ? 'text-blue-400' :
+                          token.confidence >= 50 ? 'text-yellow-400' :
+                          token.confidence >= 35 ? 'text-orange-400' : 'text-red-400'
+                        }`}>
+                          {token.confidence}
+                        </div>
+                      </div>
+                      <div className={`px-4 py-2 rounded-lg font-bold text-sm ${
+                        token.signalColor === 'green' ? 'bg-green-500/20 text-green-400' :
+                        token.signalColor === 'orange' ? 'bg-orange-500/20 text-orange-400' :
+                        token.signalColor === 'red' ? 'bg-red-500/20 text-red-400' :
+                        'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {token.signalIcon} {token.signal}
+                      </div>
+                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-300">{token.whaleCount} whales</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-300">{token.positions.length} posições</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-slate-700">
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <div className="text-slate-400 text-xs mb-1">Consenso</div>
+                        <div className={`font-bold ${
+                          token.consensus === 'LONG' ? 'text-green-400' :
+                          token.consensus === 'SHORT' ? 'text-orange-400' : 'text-yellow-400'
+                        }`}>
+                          {token.consensus === 'LONG' ? '🟢' : token.consensus === 'SHORT' ? '🔴' : '⚖️'} {token.consensus} ({token.longs}L / {token.shorts}S)
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-slate-400 text-xs mb-1">Volume Total</div>
+                        <div className="font-bold text-blue-400">{formatCurrencyExact(token.totalVolume)}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-400 text-xs mb-1">PnL Agregado</div>
+                        <div className={`font-bold ${token.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {formatCurrencyExact(token.totalPnL)} ({token.avgProfitPct >= 0 ? '+' : ''}{token.avgProfitPct.toFixed(2)}%)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs text-slate-400 flex items-center gap-2">
+                    <span>{isExpanded ? '▲' : '▼'} Clique para {isExpanded ? 'ocultar' : 'expandir'} análise detalhada</span>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="border-t border-slate-700 p-4 bg-slate-900/50 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                        <h4 className="text-sm font-bold text-purple-400 mb-3 flex items-center gap-2">
+                          <Zap className="w-4 h-4" />
+                          📊 Análise Detalhada
+                        </h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">💪 Força da Posição:</span>
+                            <span className="font-bold text-blue-400">
+                              {formatCurrencyExact(token.avgSize)} {token.avgSize > 500000 ? '🔥 ALTO' : token.avgSize > 100000 ? '📈 MÉDIO' : '📊 BAIXO'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">⚡ Alavancagem Média:</span>
+                            <span className="font-bold text-yellow-400">
+                              {token.avgLeverage.toFixed(1)}x {token.avgLeverage > 5 ? '🔴 ALTO' : token.avgLeverage > 3 ? '🟡 MODERADO' : '🟢 BAIXO'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">📊 Concentração:</span>
+                            <span className="font-bold text-purple-400">
+                              {token.concentration.toFixed(0)}% {token.concentration > 70 ? '🔴 ALTO' : token.concentration > 50 ? '🟡 MÉDIO' : '🟢 DISTRIBUÍDO'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">🛡️ Distância Liquidação:</span>
+                            <span className={`font-bold ${token.avgLiquidationDistance > 15 ? 'text-green-400' : token.avgLiquidationDistance > 10 ? 'text-yellow-400' : 'text-red-400'}`}>
+                              {token.avgLiquidationDistance.toFixed(1)}% {token.avgLiquidationDistance > 15 ? '🟢 SEGURO' : token.avgLiquidationDistance > 10 ? '🟡 MÉDIO' : '🔴 RISCO'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                        <h4 className="text-sm font-bold text-orange-400 mb-3 flex items-center gap-2">
+                          <Shield className="w-4 h-4" />
+                          ⚠️ Análise de Risco
+                        </h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Risco Cascata:</span>
+                            <span className={`font-bold ${token.cascadeRisk < 20 ? 'text-green-400' : token.cascadeRisk < 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                              {token.cascadeRisk.toFixed(0)}% {token.cascadeRisk < 20 ? '🟢 BAIXO' : token.cascadeRisk < 40 ? '🟡 MÉDIO' : '🔴 ALTO'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">% Portfolio:</span>
+                            <span className="font-bold text-cyan-400">{token.portfolioPercent.toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Momentum:</span>
+                            <span className="font-bold text-blue-400">{token.momentum}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/30">
+                      <h4 className="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4" />
+                        💡 Análise de Preço
+                      </h4>
+                      <div className="grid grid-cols-3 gap-4 text-sm mb-3">
+                        <div>
+                          <div className="text-slate-400 text-xs mb-1">Preço Atual</div>
+                          <div className="font-bold text-white">${token.currentPrice.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400 text-xs mb-1">Preço Médio Whales</div>
+                          <div className="font-bold text-blue-400">${token.avgEntryPrice.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400 text-xs mb-1">Lucro Médio</div>
+                          <div className={`font-bold ${token.avgProfitPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {token.avgProfitPct >= 0 ? '+' : ''}{token.avgProfitPct.toFixed(2)}%
+                          </div>
+                        </div>
+                      </div>
+                      <div className={`text-xs p-3 rounded ${token.avgProfitPct >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                        {token.avgProfitPct >= 0 ? '✅' : '⚠️'} {token.avgProfitPct >= 0
+                          ? `Whales estão em lucro. Você entraria $${(token.currentPrice - token.avgEntryPrice).toFixed(2)} acima delas.`
+                          : `Whales estão em prejuízo. Você entraria $${Math.abs(token.currentPrice - token.avgEntryPrice).toFixed(2)} abaixo delas.`}
+                      </div>
+                    </div>
+
+                    <div className={`rounded-lg p-4 border ${
+                      token.signalColor === 'green' ? 'bg-green-500/10 border-green-500/30' :
+                      token.signalColor === 'orange' ? 'bg-orange-500/10 border-orange-500/30' :
+                      token.signalColor === 'red' ? 'bg-red-500/10 border-red-500/30' :
+                      'bg-yellow-500/10 border-yellow-500/30'
+                    }`}>
+                      <h4 className="text-sm font-bold mb-2 flex items-center gap-2">
+                        {token.signalIcon} RECOMENDAÇÃO: {token.signal}
+                      </h4>
+                      <p className="text-xs text-slate-300">
+                        {token.signal === 'STRONG BUY' && 'Alto consenso, baixo risco, PnL positivo. Posição favorável para copiar.'}
+                        {token.signal === 'BUY' && 'Consenso favorável com risco aceitável. Considere entrar com cautela.'}
+                        {token.signal === 'HOLD' && 'Sinais mistos. Aguarde melhor momento para entrada.'}
+                        {token.signal === 'SELL' && 'Consenso fraco com risco aumentado. Evite entrar ou considere sair.'}
+                        {token.signal === 'STRONG SELL' && 'Alto risco, baixo consenso, PnL negativo. Não recomendado.'}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                      <h4 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                        <Activity className="w-4 h-4" />
+                        📋 Posições Individuais ({token.positions.length})
+                      </h4>
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {token.positions.map((pos, idx) => (
+                          <div key={idx} className="bg-slate-900/50 rounded p-3 text-xs border border-slate-700/50">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-1 rounded font-bold ${pos.isLong ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                  {pos.isLong ? '🟢 LONG' : '🔴 SHORT'}
+                                </span>
+                                <span className="font-semibold text-white">{pos.whaleNickname}</span>
+                                <span className="text-slate-500 font-mono">{pos.whaleAddress.slice(0, 6)}...{pos.whaleAddress.slice(-4)}</span>
+                              </div>
+                              <a href={`https://hypurrscan.io/address/${pos.whaleAddress}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 text-xs">
+                              <div>
+                                <div className="text-slate-500">Tamanho</div>
+                                <div className="text-white font-bold">{Math.abs(parseFloat(pos.szi || 0)).toFixed(4)}</div>
+                              </div>
+                              <div>
+                                <div className="text-slate-500">Valor</div>
+                                <div className="text-blue-400 font-bold">{formatCurrencyExact(parseFloat(pos.positionValue || pos.position_value || 0))}</div>
+                              </div>
+                              <div>
+                                <div className="text-slate-500">PnL</div>
+                                <div className={`font-bold ${parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {formatCurrencyExact(parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0))}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-slate-500">Entrada</div>
+                                <div className="text-white font-mono">${parseFloat(pos.entryPx || pos.entry_px || 0).toFixed(2)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+
+    {typeof getTokensAggregated !== 'undefined' && (
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+          <p className="text-slate-400 text-xs mb-1">Tokens Únicos</p>
+          <p className="text-2xl font-bold text-purple-400">{getTokensAggregated().length}</p>
+        </div>
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+          <p className="text-slate-400 text-xs mb-1">Consenso LONG</p>
+          <p className="text-2xl font-bold text-green-400">{getTokensAggregated().filter(t => t.longs > t.shorts).length}</p>
+        </div>
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+          <p className="text-slate-400 text-xs mb-1">Consenso SHORT</p>
+          <p className="text-2xl font-bold text-orange-400">{getTokensAggregated().filter(t => t.shorts > t.longs).length}</p>
+        </div>
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+          <p className="text-slate-400 text-xs mb-1">Divididos</p>
+          <p className="text-2xl font-bold text-yellow-400">{getTokensAggregated().filter(t => Math.abs(t.longs - t.shorts) <= 1).length}</p>
+        </div>
+        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+          <p className="text-slate-400 text-xs mb-1">High Confidence</p>
+          <p className="text-2xl font-bold text-cyan-400">{getTokensAggregated().filter(t => t.confidence >= 80).length}</p>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
+{/* ============================================ */}
+{/* FIM DA PARTE 3 DE 3 - ABA AI TOKEN */}
 {/* CÓDIGO COMPLETO! */}
 {/* ============================================ */}
