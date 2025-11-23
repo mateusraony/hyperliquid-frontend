@@ -50,6 +50,14 @@ export default function HyperliquidPro() {
   const [sortPositionsField, setSortPositionsField] = useState(null);
   const [sortPositionsDirection, setSortPositionsDirection] = useState('asc');
 
+  // ============================================
+  // FASE 3: NOVOS ESTADOS PARA ABA AI TOKEN
+  // ============================================
+  const [tokenFilter, setTokenFilter] = useState('all'); // 'all', 'long', 'short', 'mixed'
+  const [tokenSortField, setTokenSortField] = useState('popularity'); // 'popularity', 'volume', 'pnl', 'name'
+  const [tokenSortDirection, setTokenSortDirection] = useState('desc');
+  const [expandedTokenDetail, setExpandedTokenDetail] = useState(null);
+
   // Dados de liquidação (SEMPRE VISÍVEIS)
   const liquidationData = {
     '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
@@ -486,6 +494,121 @@ export default function HyperliquidPro() {
     }
     
     return orders;
+  };
+
+  // ============================================
+  // FASE 3: FUNÇÕES PARA ABA AI TOKEN
+  // ============================================
+  const getTokensAggregated = () => {
+    const tokenMap = new Map();
+    
+    whalesData.forEach(whale => {
+      const positions = whale.positions || whale.active_positions || [];
+      const nickname = whale.nickname || `Whale ${whale.address.slice(0, 6)}`;
+      
+      positions.forEach(pos => {
+        const coin = pos.coin || pos.symbol || pos.asset || 'UNKNOWN';
+        const szi = parseFloat(pos.szi || 0);
+        const isLong = szi > 0 || (pos.side || '').includes('LONG');
+        const posValue = parseFloat(pos.positionValue || pos.position_value || 0);
+        const pnl = parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0);
+        
+        if (!tokenMap.has(coin)) {
+          tokenMap.set(coin, {
+            coin,
+            whales: new Set(),
+            longs: 0,
+            shorts: 0,
+            totalVolume: 0,
+            totalPnL: 0,
+            positions: []
+          });
+        }
+        
+        const tokenData = tokenMap.get(coin);
+        tokenData.whales.add(whale.address);
+        if (isLong) tokenData.longs++;
+        else tokenData.shorts++;
+        tokenData.totalVolume += posValue;
+        tokenData.totalPnL += pnl;
+        tokenData.positions.push({
+          ...pos,
+          whaleAddress: whale.address,
+          whaleNickname: nickname,
+          isLong
+        });
+      });
+    });
+    
+    // Converter Map para Array
+    return Array.from(tokenMap.values()).map(token => ({
+      ...token,
+      whaleCount: token.whales.size,
+      consensus: token.longs > token.shorts ? 'LONG' : token.shorts > token.longs ? 'SHORT' : 'MIXED'
+    }));
+  };
+
+  const getFilteredTokens = () => {
+    let tokens = getTokensAggregated();
+    
+    if (tokenFilter === 'long') {
+      tokens = tokens.filter(t => t.longs > t.shorts);
+    } else if (tokenFilter === 'short') {
+      tokens = tokens.filter(t => t.shorts > t.longs);
+    } else if (tokenFilter === 'mixed') {
+      tokens = tokens.filter(t => t.longs === t.shorts || (t.longs > 0 && t.shorts > 0 && Math.abs(t.longs - t.shorts) <= 1));
+    }
+    
+    return tokens;
+  };
+
+  const getSortedTokens = () => {
+    let tokens = getFilteredTokens();
+    
+    return [...tokens].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (tokenSortField) {
+        case 'popularity':
+          aValue = a.whaleCount;
+          bValue = b.whaleCount;
+          break;
+        case 'volume':
+          aValue = a.totalVolume;
+          bValue = b.totalVolume;
+          break;
+        case 'pnl':
+          aValue = a.totalPnL;
+          bValue = b.totalPnL;
+          break;
+        case 'name':
+          aValue = a.coin;
+          bValue = b.coin;
+          break;
+        default:
+          aValue = a.whaleCount;
+          bValue = b.whaleCount;
+      }
+      
+      if (typeof aValue === 'string') {
+        return tokenSortDirection === 'asc'
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      } else {
+        return tokenSortDirection === 'asc'
+          ? aValue - bValue
+          : bValue - aValue;
+      }
+    });
+  };
+
+  const handleTokenSort = (field) => {
+    if (tokenSortField === field) {
+      setTokenSortDirection(tokenSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setTokenSortField(field);
+      setTokenSortDirection('desc');
+    }
   };
   // ============================================
 
@@ -1088,7 +1211,7 @@ export default function HyperliquidPro() {
         )}
 
         {/* ============================================ */}
-        {/* FASE 2: ABA POSITIONS - NOVA IMPLEMENTAÇÃO! */}
+        {/* FASE 2: ABA POSITIONS - IMPLEMENTADA */}
         {/* ============================================ */}
         {tab === 'positions' && (
           <div className="space-y-4">
@@ -1319,7 +1442,7 @@ export default function HyperliquidPro() {
         )}
 
         {/* ============================================ */}
-        {/* FASE 2: ABA ORDERS - NOVA IMPLEMENTAÇÃO! */}
+        {/* FASE 2: ABA ORDERS - IMPLEMENTADA */}
         {/* ============================================ */}
         {tab === 'orders' && (
           <div className="space-y-4">
@@ -1472,8 +1595,258 @@ export default function HyperliquidPro() {
           </div>
         )}
 
+        {/* ============================================ */}
+        {/* FASE 3: ABA AI TOKEN - NOVA IMPLEMENTAÇÃO! */}
+        {/* ============================================ */}
+        {tab === 'ai-token' && (
+          <div className="space-y-4">
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Brain className="w-6 h-6 text-purple-400" />
+                  <div>
+                    <h2 className="text-xl font-bold">🤖 Análise Agregada por Token</h2>
+                    <p className="text-xs text-slate-400">
+                      {getSortedTokens().length} tokens com posições abertas
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Controles */}
+                <div className="flex items-center gap-3">
+                  {/* Filtros */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTokenFilter('all')}
+                      className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                        tokenFilter === 'all'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}>
+                      Todos
+                    </button>
+                    <button
+                      onClick={() => setTokenFilter('long')}
+                      className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                        tokenFilter === 'long'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}>
+                      Maioria LONG
+                    </button>
+                    <button
+                      onClick={() => setTokenFilter('short')}
+                      className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                        tokenFilter === 'short'
+                          ? 'bg-orange-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}>
+                      Maioria SHORT
+                    </button>
+                    <button
+                      onClick={() => setTokenFilter('mixed')}
+                      className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                        tokenFilter === 'mixed'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}>
+                      Divididos
+                    </button>
+                  </div>
+                  
+                  {/* Ordenação */}
+                  <select
+                    value={tokenSortField}
+                    onChange={(e) => {
+                      setTokenSortField(e.target.value);
+                      setTokenSortDirection('desc');
+                    }}
+                    className="bg-slate-700 text-white px-3 py-1.5 rounded text-xs font-medium">
+                    <option value="popularity">Ordenar por: Popularidade</option>
+                    <option value="volume">Ordenar por: Volume</option>
+                    <option value="pnl">Ordenar por: PnL</option>
+                    <option value="name">Ordenar por: Nome</option>
+                  </select>
+                </div>
+              </div>
+
+              {getSortedTokens().length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>Nenhum token com posições abertas</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {getSortedTokens().map((token) => {
+                    const isExpanded = expandedTokenDetail === token.coin;
+                    const consensusColor = token.consensus === 'LONG' 
+                      ? 'from-green-500/20 to-green-500/5 border-green-500/30'
+                      : token.consensus === 'SHORT'
+                      ? 'from-orange-500/20 to-orange-500/5 border-orange-500/30'
+                      : 'from-yellow-500/20 to-yellow-500/5 border-yellow-500/30';
+                    
+                    return (
+                      <div key={token.coin} className={`bg-gradient-to-r ${consensusColor} border rounded-lg overflow-hidden`}>
+                        {/* Header - Sempre visível */}
+                        <div 
+                          className="p-4 cursor-pointer hover:bg-slate-700/20 transition-colors"
+                          onClick={() => setExpandedTokenDetail(isExpanded ? null : token.coin)}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              {/* Token Info */}
+                              <div>
+                                <h3 className="text-lg font-bold text-blue-400">{token.coin}</h3>
+                                <p className="text-xs text-slate-400">
+                                  {token.whaleCount} whale{token.whaleCount > 1 ? 's' : ''} • {token.longs + token.shorts} posições
+                                </p>
+                              </div>
+                              
+                              {/* Consenso */}
+                              <div className="flex items-center gap-2">
+                                <span className={`px-3 py-1 rounded font-bold text-sm ${
+                                  token.consensus === 'LONG' 
+                                    ? 'bg-green-500/30 text-green-400'
+                                    : token.consensus === 'SHORT'
+                                    ? 'bg-orange-500/30 text-orange-400'
+                                    : 'bg-yellow-500/30 text-yellow-400'
+                                }`}>
+                                  {token.consensus === 'LONG' ? '🟢 LONG' : token.consensus === 'SHORT' ? '🔴 SHORT' : '⚖️ MIXED'}
+                                </span>
+                                <div className="text-xs text-slate-400">
+                                  {token.longs}L / {token.shorts}S
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Métricas Resumidas */}
+                            <div className="flex items-center gap-6">
+                              <div className="text-right">
+                                <p className="text-xs text-slate-400">Volume Total</p>
+                                <p className="text-lg font-bold text-blue-400">{formatCurrency(token.totalVolume)}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-slate-400">PnL Agregado</p>
+                                <p className={`text-lg font-bold ${token.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {formatCurrency(token.totalPnL)}
+                                </p>
+                              </div>
+                              <div>
+                                {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Detalhes Expandidos */}
+                        {isExpanded && (
+                          <div className="border-t border-slate-700 bg-slate-900/50 p-4">
+                            <h4 className="text-sm font-bold text-slate-300 mb-3">Detalhes das Posições:</h4>
+                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                              {token.positions.map((pos, idx) => {
+                                const size = Math.abs(parseFloat(pos.szi || 0));
+                                const posValue = parseFloat(pos.positionValue || pos.position_value || 0);
+                                const pnl = parseFloat(pos.unrealizedPnl || pos.unrealized_pnl || 0);
+                                
+                                return (
+                                  <div key={idx} className="bg-slate-800/50 rounded p-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                        pos.isLong 
+                                          ? 'bg-green-500/20 text-green-400'
+                                          : 'bg-orange-500/20 text-orange-400'
+                                      }`}>
+                                        {pos.isLong ? '🟢 LONG' : '🔴 SHORT'}
+                                      </span>
+                                      <div>
+                                        <p className="font-semibold text-sm">{pos.whaleNickname}</p>
+                                        <p className="text-xs text-slate-400 font-mono">
+                                          {pos.whaleAddress.slice(0, 6)}...{pos.whaleAddress.slice(-4)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-right">
+                                      <div>
+                                        <p className="text-xs text-slate-400">Tamanho</p>
+                                        <p className="font-mono text-sm">{size.toFixed(4)}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-slate-400">Valor</p>
+                                        <p className="font-bold text-sm">{formatCurrency(posValue)}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-slate-400">PnL</p>
+                                        <p className={`font-bold text-sm ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                          {formatCurrency(pnl)}
+                                        </p>
+                                      </div>
+                                      <a 
+                                        href={`https://hypurrscan.io/address/${pos.whaleAddress}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-400 hover:text-blue-300">
+                                        <ExternalLink className="w-4 h-4" />
+                                      </a>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Resumo Geral da Aba AI Token */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-gradient-to-r from-purple-500/10 to-purple-500/5 border border-purple-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain className="w-5 h-5 text-purple-400" />
+                  <h3 className="font-bold text-purple-400">Tokens Únicos</h3>
+                </div>
+                <p className="text-3xl font-bold text-purple-400">
+                  {getTokensAggregated().length}
+                </p>
+              </div>
+              
+              <div className="bg-gradient-to-r from-green-500/10 to-green-500/5 border border-green-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="w-5 h-5 text-green-400" />
+                  <h3 className="font-bold text-green-400">Consenso LONG</h3>
+                </div>
+                <p className="text-3xl font-bold text-green-400">
+                  {getTokensAggregated().filter(t => t.consensus === 'LONG').length}
+                </p>
+              </div>
+              
+              <div className="bg-gradient-to-r from-orange-500/10 to-orange-500/5 border border-orange-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingDown className="w-5 h-5 text-orange-400" />
+                  <h3 className="font-bold text-orange-400">Consenso SHORT</h3>
+                </div>
+                <p className="text-3xl font-bold text-orange-400">
+                  {getTokensAggregated().filter(t => t.consensus === 'SHORT').length}
+                </p>
+              </div>
+              
+              <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-500/5 border border-yellow-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                  <h3 className="font-bold text-yellow-400">Divididos</h3>
+                </div>
+                <p className="text-3xl font-bold text-yellow-400">
+                  {getTokensAggregated().filter(t => t.consensus === 'MIXED').length}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Outras abas permanecem iguais */}
-        {!['command', 'positions', 'orders'].includes(tab) && (
+        {!['command', 'positions', 'orders', 'ai-token'].includes(tab) && (
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
             <h2 className="text-xl font-bold mb-4">Em desenvolvimento</h2>
             <p className="text-slate-400">Aba {tab} será implementada em breve</p>
