@@ -1,13 +1,13 @@
 // ============================================
-// HYPERLIQUID PRO TRACKER - FASE 5 COMPLETA ✅
-// Métricas REAIS do Backend + Indicadores REAL/MOCK
-// TODAS as abas funcionando + AI Token completa
+// HYPERLIQUID PRO TRACKER - FASE 6.1 + 6.2 ✅
+// FASE 6.1: Trades Tab COMPLETA
+// FASE 6.2: Polish Institucional (Timestamps, Indicators, Tooltips, MDD, Disclaimer)
 // Arquivo único - Cole tudo de uma vez
 // ============================================
 
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
-import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Send, Flame, Star } from 'lucide-react';
+import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Send, Flame, Star, Download, Calendar, Search } from 'lucide-react';
 
 const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
 
@@ -24,7 +24,6 @@ export default function HyperliquidPro() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [error, setError] = useState(null);
   
-  // ✅ FASE 5: Estado para métricas globais REAIS
   const [globalMetrics, setGlobalMetrics] = useState({
     win_rate_global: null,
     win_rate_long: null,
@@ -68,6 +67,30 @@ export default function HyperliquidPro() {
   const [tokenSortDirection, setTokenSortDirection] = useState('desc');
   const [expandedTokenDetail, setExpandedTokenDetail] = useState(null);
 
+  // ============================================
+  // 🆕 FASE 6.1 - ESTADOS TRADES TAB
+  // ============================================
+  const [tradesData, setTradesData] = useState([]);
+  const [isLoadingTrades, setIsLoadingTrades] = useState(false);
+  const [tradesError, setTradesError] = useState(null);
+  const [tradesLastUpdate, setTradesLastUpdate] = useState(null);
+  
+  // Filtros
+  const [tradesWhaleFilter, setTradesWhaleFilter] = useState('all');
+  const [tradesTokenFilter, setTradesTokenFilter] = useState('');
+  const [tradesTypeFilter, setTradesTypeFilter] = useState('all'); // all, long, short
+  const [tradesStatusFilter, setTradesStatusFilter] = useState('all'); // all, win, loss
+  const [tradesDateStart, setTradesDateStart] = useState('');
+  const [tradesDateEnd, setTradesDateEnd] = useState('');
+  
+  // Ordenação
+  const [tradesSortField, setTradesSortField] = useState('timestamp');
+  const [tradesSortDirection, setTradesSortDirection] = useState('desc');
+  
+  // Paginação
+  const [tradesCurrentPage, setTradesCurrentPage] = useState(1);
+  const tradesPerPage = 20;
+
   // ⚠️ DADOS MOCKADOS - Liquidações detalhadas (backend ainda não retorna breakdown)
   const liquidationData = {
     '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
@@ -81,6 +104,36 @@ export default function HyperliquidPro() {
     avgRR: 2.8,
     correlation: 78,
     var95: -12450,
+  };
+
+  // ============================================
+  // 🆕 FASE 6.2 - HELPER: Calcular "tempo atrás"
+  // ============================================
+  const getTimeAgo = (date) => {
+    if (!date) return 'nunca';
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return `${seconds}s atrás`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m atrás`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h atrás`;
+    return `${Math.floor(seconds / 86400)}d atrás`;
+  };
+
+  // ============================================
+  // 🆕 FASE 6.2 - HELPER: Status dos dados
+  // ============================================
+  const getDataStatus = () => {
+    if (!lastUpdate) return { status: 'offline', color: 'red', icon: '🔴', text: 'OFFLINE' };
+    
+    const secondsSinceUpdate = Math.floor((new Date() - lastUpdate) / 1000);
+    
+    if (secondsSinceUpdate < 60) {
+      return { status: 'live', color: 'green', icon: '🟢', text: 'LIVE DATA' };
+    } else if (secondsSinceUpdate < 300) { // 5 minutos
+      return { status: 'delayed', color: 'yellow', icon: '🟡', text: 'DELAYED' };
+    } else {
+      return { status: 'stale', color: 'red', icon: '🔴', text: 'STALE DATA' };
+    }
   };
 
   // ============================================
@@ -127,7 +180,6 @@ export default function HyperliquidPro() {
     }
   };
 
-  // ✅ FASE 5: Processar métricas do backend
   const processGlobalMetrics = (whalesArray) => {
     let totalTrades = 0;
     let sumWinRateGlobal = 0;
@@ -229,6 +281,283 @@ export default function HyperliquidPro() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ============================================
+  // 🆕 FASE 6.1 - FETCH TRADES
+  // ============================================
+  const fetchTrades = async (limit = 1000) => {
+    console.log('🔄 Buscando trades...');
+    try {
+      setTradesError(null);
+      setIsLoadingTrades(true);
+      
+      const response = await fetch(`${API_URL}/api/database/trades?limit=${limit}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(60000)
+      });
+
+      if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+
+      const data = await response.json();
+      const tradesArray = Array.isArray(data) ? data : (data?.trades || []);
+      
+      setTradesData(tradesArray);
+      setTradesLastUpdate(new Date());
+      console.log('✅ Trades carregados:', tradesArray.length);
+    } catch (err) {
+      console.error('❌ Erro ao carregar trades:', err);
+      setTradesError(err.message);
+      setTradesData([]);
+    } finally {
+      setIsLoadingTrades(false);
+    }
+  };
+
+  // ============================================
+  // 🆕 FASE 6.1 - FUNÇÕES TRADES TAB
+  // ============================================
+  
+  const getFilteredTrades = () => {
+    let filtered = [...tradesData];
+    
+    // Filtro por whale
+    if (tradesWhaleFilter !== 'all') {
+      filtered = filtered.filter(t => t.wallet_address === tradesWhaleFilter);
+    }
+    
+    // Filtro por token (busca parcial)
+    if (tradesTokenFilter.trim()) {
+      const searchTerm = tradesTokenFilter.toLowerCase().trim();
+      filtered = filtered.filter(t => 
+        (t.coin || '').toLowerCase().includes(searchTerm)
+      );
+    }
+    
+    // Filtro por tipo (long/short)
+    if (tradesTypeFilter !== 'all') {
+      filtered = filtered.filter(t => {
+        const side = (t.side || '').toLowerCase();
+        if (tradesTypeFilter === 'long') {
+          return side.includes('long') || side.includes('buy');
+        } else if (tradesTypeFilter === 'short') {
+          return side.includes('short') || side.includes('sell');
+        }
+        return true;
+      });
+    }
+    
+    // Filtro por status (win/loss)
+    if (tradesStatusFilter !== 'all') {
+      filtered = filtered.filter(t => {
+        const pnl = parseFloat(t.closed_pnl || t.pnl || 0);
+        if (tradesStatusFilter === 'win') return pnl > 0;
+        if (tradesStatusFilter === 'loss') return pnl < 0;
+        return true;
+      });
+    }
+    
+    // Filtro por data
+    if (tradesDateStart) {
+      const startDate = new Date(tradesDateStart);
+      filtered = filtered.filter(t => {
+        const tradeDate = new Date(t.time || t.timestamp);
+        return tradeDate >= startDate;
+      });
+    }
+    
+    if (tradesDateEnd) {
+      const endDate = new Date(tradesDateEnd);
+      endDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(t => {
+        const tradeDate = new Date(t.time || t.timestamp);
+        return tradeDate <= endDate;
+      });
+    }
+    
+    return filtered;
+  };
+
+  const getSortedTrades = () => {
+    const filtered = getFilteredTrades();
+    
+    return [...filtered].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (tradesSortField) {
+        case 'timestamp':
+          aValue = new Date(a.time || a.timestamp).getTime();
+          bValue = new Date(b.time || b.timestamp).getTime();
+          break;
+        case 'whale':
+          aValue = a.wallet_address || '';
+          bValue = b.wallet_address || '';
+          break;
+        case 'token':
+          aValue = a.coin || '';
+          bValue = b.coin || '';
+          break;
+        case 'type':
+          aValue = (a.side || '').toLowerCase();
+          bValue = (b.side || '').toLowerCase();
+          break;
+        case 'entry':
+          aValue = parseFloat(a.px || a.entry_price || 0);
+          bValue = parseFloat(b.px || b.entry_price || 0);
+          break;
+        case 'exit':
+          aValue = parseFloat(a.closedPnl || a.closed_pnl || 0);
+          bValue = parseFloat(b.closedPnl || b.closed_pnl || 0);
+          break;
+        case 'size':
+          aValue = parseFloat(a.sz || a.size || 0);
+          bValue = parseFloat(b.sz || b.size || 0);
+          break;
+        case 'pnl':
+          aValue = parseFloat(a.closedPnl || a.closed_pnl || a.pnl || 0);
+          bValue = parseFloat(b.closedPnl || b.closed_pnl || b.pnl || 0);
+          break;
+        default:
+          return 0;
+      }
+      
+      if (typeof aValue === 'string') {
+        return tradesSortDirection === 'asc' 
+          ? aValue.localeCompare(bValue) 
+          : bValue.localeCompare(aValue);
+      }
+      
+      return tradesSortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+  };
+
+  const getPaginatedTrades = () => {
+    const sorted = getSortedTrades();
+    const startIndex = (tradesCurrentPage - 1) * tradesPerPage;
+    const endIndex = startIndex + tradesPerPage;
+    return sorted.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = () => {
+    const filtered = getFilteredTrades();
+    return Math.ceil(filtered.length / tradesPerPage);
+  };
+
+  const handleTradesSort = (field) => {
+    if (tradesSortField === field) {
+      setTradesSortDirection(tradesSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setTradesSortField(field);
+      setTradesSortDirection('asc');
+    }
+  };
+
+  const resetTradesFilters = () => {
+    setTradesWhaleFilter('all');
+    setTradesTokenFilter('');
+    setTradesTypeFilter('all');
+    setTradesStatusFilter('all');
+    setTradesDateStart('');
+    setTradesDateEnd('');
+    setTradesCurrentPage(1);
+  };
+
+  const exportTradesCSV = () => {
+    const trades = getFilteredTrades();
+    if (trades.length === 0) {
+      alert('Nenhum trade para exportar');
+      return;
+    }
+    
+    // Cabeçalhos
+    const headers = ['Timestamp', 'Whale', 'Token', 'Type', 'Entry Price', 'Exit Price', 'Size', 'PnL', 'Duration', 'Status'];
+    
+    // Linhas
+    const rows = trades.map(trade => {
+      const pnl = parseFloat(trade.closedPnl || trade.closed_pnl || trade.pnl || 0);
+      const status = pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'NEUTRAL';
+      const whale = whalesData.find(w => w.address === trade.wallet_address);
+      const nickname = whale?.nickname || trade.wallet_address?.slice(0, 8) || 'Unknown';
+      
+      return [
+        new Date(trade.time || trade.timestamp).toISOString(),
+        nickname,
+        trade.coin || 'N/A',
+        trade.side || 'N/A',
+        trade.px || trade.entry_price || 0,
+        trade.closedPnl || trade.closed_pnl || 0,
+        trade.sz || trade.size || 0,
+        pnl.toFixed(2),
+        'N/A', // Duration não disponível
+        status
+      ];
+    });
+    
+    // Criar CSV
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+    
+    // Download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `hyperliquid_trades_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const calculateTradesMetrics = () => {
+    const trades = getFilteredTrades();
+    
+    if (trades.length === 0) {
+      return {
+        totalTrades: 0,
+        totalPnL: 0,
+        winRate: 0,
+        avgTradeSize: 0,
+        bestTrade: 0,
+        worstTrade: 0,
+        wins: 0,
+        losses: 0
+      };
+    }
+    
+    let totalPnL = 0;
+    let wins = 0;
+    let losses = 0;
+    let bestTrade = -Infinity;
+    let worstTrade = Infinity;
+    let totalSize = 0;
+    
+    trades.forEach(trade => {
+      const pnl = parseFloat(trade.closedPnl || trade.closed_pnl || trade.pnl || 0);
+      const size = parseFloat(trade.sz || trade.size || 0) * parseFloat(trade.px || trade.entry_price || 0);
+      
+      totalPnL += pnl;
+      totalSize += size;
+      
+      if (pnl > 0) wins++;
+      if (pnl < 0) losses++;
+      
+      if (pnl > bestTrade) bestTrade = pnl;
+      if (pnl < worstTrade) worstTrade = pnl;
+    });
+    
+    const winRate = trades.length > 0 ? (wins / trades.length) * 100 : 0;
+    const avgTradeSize = trades.length > 0 ? totalSize / trades.length : 0;
+    
+    return {
+      totalTrades: trades.length,
+      totalPnL,
+      winRate,
+      avgTradeSize,
+      bestTrade: bestTrade === -Infinity ? 0 : bestTrade,
+      worstTrade: worstTrade === Infinity ? 0 : worstTrade,
+      wins,
+      losses
+    };
   };
 
   const handleAddWhale = async () => {
@@ -480,15 +809,12 @@ export default function HyperliquidPro() {
     const entryPrices = positions.map(pos => parseFloat(pos.entryPx || pos.entry_px || 0)).filter(p => p > 0);
     const avgEntryPrice = entryPrices.length > 0 ? entryPrices.reduce((s, p) => s + p, 0) / entryPrices.length : 0;
     
-    // ✅ CORREÇÃO DO BUG: Usar markPx do backend ao invés de fallback para entryPx
     const markPrices = positions.map(pos => parseFloat(pos.markPx || 0)).filter(p => p > 0);
     const currentPrice = markPrices.length > 0 
       ? markPrices.reduce((s, p) => s + p, 0) / markPrices.length 
-      : 0;
-    const finalCurrentPrice = currentPrice > 0 ? currentPrice : (entryPrices[0] || 0);
-    const hasPriceData = markPrices.length > 0;
+      : (entryPrices[0] || 0);
     
-    const avgProfitPct = finalCurrentPrice && avgEntryPrice ? ((finalCurrentPrice - avgEntryPrice) / avgEntryPrice) * 100 : 0;
+    const avgProfitPct = currentPrice && avgEntryPrice ? ((currentPrice - avgEntryPrice) / avgEntryPrice) * 100 : 0;
     const portfolioPercent = (tokenData.totalVolume / 10000000) * 100;
     
     let confidence = 50;
@@ -517,23 +843,7 @@ export default function HyperliquidPro() {
       signal = 'SELL'; signalColor = 'orange'; signalIcon = '🟠';
     }
     
-    return { 
-      avgSize, 
-      avgLeverage, 
-      concentration, 
-      avgLiquidationDistance, 
-      cascadeRisk, 
-      avgEntryPrice, 
-      currentPrice: finalCurrentPrice, 
-      avgProfitPct, 
-      portfolioPercent, 
-      confidence, 
-      signal, 
-      signalColor, 
-      signalIcon, 
-      momentum: 'STABLE',
-      hasPriceData
-    };
+    return { avgSize, avgLeverage, concentration, avgLiquidationDistance, cascadeRisk, avgEntryPrice, currentPrice, avgProfitPct, portfolioPercent, confidence, signal, signalColor, signalIcon, momentum: 'STABLE' };
   };
   
   const getTokensAggregated = () => {
@@ -608,6 +918,13 @@ export default function HyperliquidPro() {
     return () => clearInterval(interval);
   }, []);
 
+  // 🆕 FASE 6.1: Carregar trades quando tab for aberta
+  useEffect(() => {
+    if (tab === 'trades' && tradesData.length === 0) {
+      fetchTrades();
+    }
+  }, [tab]);
+
   const SortIcon = ({ field }) => {
     if (sortField !== field) return <ArrowUpDown className="w-3 h-3 text-slate-500" />;
     return sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />;
@@ -616,6 +933,12 @@ export default function HyperliquidPro() {
   const SortIconPositions = ({ field }) => {
     if (sortPositionsField !== field) return <ArrowUpDown className="w-3 h-3 text-slate-500" />;
     return sortPositionsDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />;
+  };
+
+  // 🆕 FASE 6.1: SortIcon para Trades
+  const SortIconTrades = ({ field }) => {
+    if (tradesSortField !== field) return <ArrowUpDown className="w-3 h-3 text-slate-500" />;
+    return tradesSortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />;
   };
 
   const getStatusEmoji = () => systemStatus === 'online' ? '🟢' : systemStatus === 'warning' ? '🟡' : '🔴';
@@ -649,6 +972,9 @@ export default function HyperliquidPro() {
   const longPercentage = totalTrades > 0 ? ((longShortMetrics.totalLongs / totalTrades) * 100).toFixed(0) : 0;
   const shortPercentage = totalTrades > 0 ? ((longShortMetrics.totalShorts / totalTrades) * 100).toFixed(0) : 0;
   const sortedData = getSortedData();
+
+  // 🆕 FASE 6.2: Pegar status dos dados
+  const dataStatus = getDataStatus();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white" style={{ scrollbarWidth: 'thin', scrollbarColor: '#6366f1 #1e293b' }}>
@@ -753,31 +1079,42 @@ export default function HyperliquidPro() {
               </div>
             )}
 
-            {/* ✅ FASE 5: Métricas REAIS do Backend */}
+            {/* 🆕 FASE 6.2: Status Indicator no topo */}
+            <div className={`flex items-center justify-between bg-${dataStatus.color}-500/10 border border-${dataStatus.color}-500/30 rounded-lg p-3`}>
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 bg-${dataStatus.color}-400 rounded-full animate-pulse`}></div>
+                <span className={`text-${dataStatus.color}-400 font-bold text-sm`}>{dataStatus.icon} {dataStatus.text}</span>
+              </div>
+              <span className="text-xs text-slate-400">
+                Last update: {lastUpdate ? getTimeAgo(lastUpdate) : 'nunca'}
+              </span>
+            </div>
+
+            {/* MÉTRICAS REAIS DO BACKEND - COM TOOLTIPS */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Soma do valor de todas as posições abertas das whales monitoradas">
                 <p className="text-slate-400 text-xs uppercase mb-1">Total Value</p>
                 <p className="metric-value text-2xl font-bold text-green-400">{formatCurrency(totalMetrics.totalValue)}</p>
-                <p className="text-xs text-green-400">✅ REAL</p>
+                <p className="text-xs text-green-400">✅ REAL • {getTimeAgo(lastUpdate)}</p>
               </div>
-              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Número total de posições abertas no momento">
                 <p className="text-slate-400 text-xs uppercase mb-1">Posições</p>
                 <p className="metric-value text-2xl font-bold text-blue-400">{totalMetrics.totalPositions}</p>
-                <p className="text-xs text-blue-400">✅ REAL</p>
+                <p className="text-xs text-blue-400">✅ REAL • {getTimeAgo(lastUpdate)}</p>
               </div>
-              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Lucro/Prejuízo não realizado das últimas 24 horas">
                 <p className="text-slate-400 text-xs uppercase mb-1">PNL 24h</p>
                 <p className="metric-value text-2xl font-bold text-green-400">{formatCurrency(totalMetrics.totalPnL)}</p>
-                <p className="text-xs text-green-400">✅ REAL</p>
+                <p className="text-xs text-green-400">✅ REAL • {getTimeAgo(lastUpdate)}</p>
               </div>
-              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Número de whales sendo monitoradas ativamente">
                 <p className="text-slate-400 text-xs uppercase mb-1">Whales</p>
                 <p className="metric-value text-2xl font-bold text-purple-400">{whalesData.length}</p>
-                <p className="text-xs text-purple-400">✅ REAL</p>
+                <p className="text-xs text-purple-400">✅ REAL • {getTimeAgo(lastUpdate)}</p>
               </div>
               
-              {/* ✅ FASE 5: Win Rate Global REAL */}
-              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              {/* Win Rate Global REAL */}
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Percentual de trades lucrativos do total de trades encerrados">
                 <p className="text-slate-400 text-xs uppercase mb-1">Win Rate</p>
                 {!globalMetrics.hasEnoughData ? (
                   <>
@@ -787,7 +1124,7 @@ export default function HyperliquidPro() {
                 ) : globalMetrics.win_rate_global !== null ? (
                   <>
                     <p className="metric-value text-2xl font-bold text-green-400">{globalMetrics.win_rate_global.toFixed(1)}%</p>
-                    <p className="text-xs text-green-400">✅ REAL</p>
+                    <p className="text-xs text-green-400">✅ REAL • {globalMetrics.total_trades} trades</p>
                   </>
                 ) : (
                   <>
@@ -797,8 +1134,8 @@ export default function HyperliquidPro() {
                 )}
               </div>
               
-              {/* ✅ FASE 5: Sharpe Ratio REAL */}
-              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              {/* Sharpe Ratio REAL */}
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Relação retorno/risco. Valores acima de 1.0 são considerados bons">
                 <p className="text-slate-400 text-xs uppercase mb-1">Sharpe</p>
                 {!globalMetrics.hasEnoughData ? (
                   <>
@@ -818,8 +1155,8 @@ export default function HyperliquidPro() {
                 )}
               </div>
               
-              {/* ✅ FASE 5: Portfolio Heat REAL */}
-              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              {/* Portfolio Heat REAL */}
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Percentual do portfolio em risco ativo. Valores acima de 70% indicam alta exposição">
                 <p className="text-slate-400 text-xs uppercase mb-1">Heat</p>
                 {!globalMetrics.hasEnoughData ? (
                   <>
@@ -839,7 +1176,7 @@ export default function HyperliquidPro() {
                 )}
               </div>
               
-              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+              <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Número de alertas enviados no Telegram">
                 <p className="text-slate-400 text-xs uppercase mb-1">Alerts</p>
                 <p className="metric-value text-2xl font-bold text-cyan-400">47</p>
                 <p className="text-xs text-slate-400">⚠️ MOCK</p>
@@ -852,19 +1189,19 @@ export default function HyperliquidPro() {
                 <h3 className="text-lg font-bold">📊 Métricas LONG vs SHORT (Ao Vivo)</h3>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-slate-900/50 rounded p-3">
+                <div className="bg-slate-900/50 rounded p-3" title="Número total de posições LONG abertas">
                   <p className="text-xs text-slate-400 mb-1">Total LONGs</p>
                   <p className="text-3xl font-bold text-green-400">{longShortMetrics.totalLongs}</p>
                   <p className="text-xs text-green-400">{longPercentage}% das posições • ✅ REAL</p>
                 </div>
-                <div className="bg-slate-900/50 rounded p-3">
+                <div className="bg-slate-900/50 rounded p-3" title="Número total de posições SHORT abertas">
                   <p className="text-xs text-slate-400 mb-1">Total SHORTs</p>
                   <p className="text-3xl font-bold text-orange-400">{longShortMetrics.totalShorts}</p>
                   <p className="text-xs text-orange-400">{shortPercentage}% das posições • ✅ REAL</p>
                 </div>
                 
-                {/* ✅ FASE 5: Win Rate Long REAL */}
-                <div className="bg-slate-900/50 rounded p-3">
+                {/* Win Rate Long REAL */}
+                <div className="bg-slate-900/50 rounded p-3" title="Taxa de acerto em trades LONG (posições compradas)">
                   <p className="text-xs text-slate-400 mb-1">LONGs Win Rate</p>
                   {!globalMetrics.hasEnoughData ? (
                     <>
@@ -884,8 +1221,8 @@ export default function HyperliquidPro() {
                   )}
                 </div>
                 
-                {/* ✅ FASE 5: Win Rate Short REAL */}
-                <div className="bg-slate-900/50 rounded p-3">
+                {/* Win Rate Short REAL */}
+                <div className="bg-slate-900/50 rounded p-3" title="Taxa de acerto em trades SHORT (posições vendidas)">
                   <p className="text-xs text-slate-400 mb-1">SHORTs Win Rate</p>
                   {!globalMetrics.hasEnoughData ? (
                     <>
@@ -917,7 +1254,7 @@ export default function HyperliquidPro() {
               )}
             </div>
 
-            {/* ✅ FASE 5: Liquidações REAIS do Backend */}
+            {/* Liquidações REAIS DO Backend */}
             <div className="bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-lg p-4">
               <div className="flex items-center gap-3 mb-4">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
@@ -925,7 +1262,7 @@ export default function HyperliquidPro() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 1D - REAL */}
-                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50">
+                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50" title="Total de liquidações nas últimas 24 horas">
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-sm text-slate-300 font-bold">1D</p>
@@ -946,7 +1283,7 @@ export default function HyperliquidPro() {
                 </div>
                 
                 {/* 1W - REAL */}
-                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50">
+                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50" title="Total de liquidações nos últimos 7 dias">
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-sm text-slate-300 font-bold">1W</p>
@@ -967,7 +1304,7 @@ export default function HyperliquidPro() {
                 </div>
                 
                 {/* 1M - REAL */}
-                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50">
+                <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50" title="Total de liquidações nos últimos 30 dias">
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-sm text-slate-300 font-bold">1M</p>
@@ -1068,7 +1405,7 @@ export default function HyperliquidPro() {
                 <h3 className="text-lg font-bold">🛡️ Risk Dashboard</h3>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="bg-slate-900/50 rounded-lg p-3">
+                <div className="bg-slate-900/50 rounded-lg p-3" title="Percentual do portfolio em risco ativo">
                   <p className="text-xs text-slate-400 mb-1">Portfolio Heat</p>
                   {globalMetrics.portfolio_heat !== null && globalMetrics.hasEnoughData ? (
                     <>
@@ -1082,22 +1419,22 @@ export default function HyperliquidPro() {
                     </>
                   )}
                 </div>
-                <div className="bg-slate-900/50 rounded-lg p-3">
+                <div className="bg-slate-900/50 rounded-lg p-3" title="Capital em risco em posições próximas à liquidação">
                   <p className="text-xs text-slate-400 mb-1">Capital at Risk</p>
                   <p className="text-2xl font-bold text-red-400">{formatCurrency(riskMetrics.capitalAtRisk)}</p>
                   <p className="text-xs text-slate-400">⚠️ MOCK</p>
                 </div>
-                <div className="bg-slate-900/50 rounded-lg p-3">
+                <div className="bg-slate-900/50 rounded-lg p-3" title="Relação média entre reward e risk dos trades">
                   <p className="text-xs text-slate-400 mb-1">Avg R:R</p>
                   <p className="text-2xl font-bold text-green-400">{riskMetrics.avgRR}</p>
                   <p className="text-xs text-slate-400">⚠️ MOCK</p>
                 </div>
-                <div className="bg-slate-900/50 rounded-lg p-3">
+                <div className="bg-slate-900/50 rounded-lg p-3" title="Grau de correlação entre as posições">
                   <p className="text-xs text-slate-400 mb-1">Correlação</p>
                   <p className="text-2xl font-bold text-yellow-400">{riskMetrics.correlation}%</p>
                   <p className="text-xs text-slate-400">⚠️ MOCK</p>
                 </div>
-                <div className="bg-slate-900/50 rounded-lg p-3">
+                <div className="bg-slate-900/50 rounded-lg p-3" title="Value at Risk com 95% de confiança">
                   <p className="text-xs text-slate-400 mb-1">VaR 95%</p>
                   <p className="text-2xl font-bold text-red-400">{formatCurrency(riskMetrics.var95)}</p>
                   <p className="text-xs text-slate-400">⚠️ MOCK</p>
@@ -1271,6 +1608,365 @@ export default function HyperliquidPro() {
           </div>
         )}
 
+        {/* ============================================ */}
+        {/* 🆕 FASE 6.1 - TRADES TAB COMPLETA */}
+        {/* ============================================ */}
+        {tab === 'trades' && (
+          <div className="space-y-4">
+            {/* Header com refresh e status */}
+            <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Activity className="w-6 h-6 text-blue-400" />
+                    📊 Trade History
+                  </h2>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {getFilteredTrades().length} trades • Last update: {tradesLastUpdate ? getTimeAgo(tradesLastUpdate) : 'nunca'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => fetchTrades(1000)} 
+                  disabled={isLoadingTrades}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingTrades ? 'animate-spin' : ''}`} />
+                  {isLoadingTrades ? 'Carregando...' : 'Atualizar'}
+                </button>
+              </div>
+            </div>
+
+            {tradesError && (
+              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+                <div>
+                  <p className="text-red-400 font-semibold">Erro ao carregar trades</p>
+                  <p className="text-red-300 text-sm">{tradesError}</p>
+                  <button onClick={() => fetchTrades(1000)} className="mt-2 text-xs bg-red-600 hover:bg-red-700 px-3 py-1 rounded">
+                    Tentar novamente
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Cards de Resumo */}
+            {!isLoadingTrades && tradesData.length > 0 && (() => {
+              const metrics = calculateTradesMetrics();
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                    <p className="text-slate-400 text-xs uppercase mb-1">Total Trades</p>
+                    <p className="text-2xl font-bold text-blue-400">{metrics.totalTrades}</p>
+                  </div>
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                    <p className="text-slate-400 text-xs uppercase mb-1">Win Rate</p>
+                    <p className="text-2xl font-bold text-green-400">{metrics.winRate.toFixed(1)}%</p>
+                    <p className="text-xs text-slate-400">{metrics.wins}W / {metrics.losses}L</p>
+                  </div>
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                    <p className="text-slate-400 text-xs uppercase mb-1">Total P&L</p>
+                    <p className={`text-2xl font-bold ${metrics.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {formatCurrencyExact(metrics.totalPnL)}
+                    </p>
+                  </div>
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                    <p className="text-slate-400 text-xs uppercase mb-1">Avg Trade Size</p>
+                    <p className="text-2xl font-bold text-purple-400">{formatCurrency(metrics.avgTradeSize)}</p>
+                  </div>
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                    <p className="text-slate-400 text-xs uppercase mb-1">Best Trade</p>
+                    <p className="text-2xl font-bold text-green-400">{formatCurrencyExact(metrics.bestTrade)}</p>
+                  </div>
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                    <p className="text-slate-400 text-xs uppercase mb-1">Worst Trade</p>
+                    <p className="text-2xl font-bold text-red-400">{formatCurrencyExact(metrics.worstTrade)}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Filtros Avançados */}
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Filter className="w-4 h-4 text-blue-400" />
+                <h3 className="font-bold">Filtros</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Filtro por Whale */}
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Whale</label>
+                  <select
+                    value={tradesWhaleFilter}
+                    onChange={(e) => { setTradesWhaleFilter(e.target.value); setTradesCurrentPage(1); }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="all">Todas as Whales</option>
+                    {whalesData.map(whale => (
+                      <option key={whale.address} value={whale.address}>
+                        {whale.nickname || whale.address.slice(0, 8)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro por Token */}
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Token</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={tradesTokenFilter}
+                      onChange={(e) => { setTradesTokenFilter(e.target.value); setTradesCurrentPage(1); }}
+                      placeholder="Buscar token..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded pl-10 pr-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Filtro por Tipo */}
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Tipo</label>
+                  <select
+                    value={tradesTypeFilter}
+                    onChange={(e) => { setTradesTypeFilter(e.target.value); setTradesCurrentPage(1); }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="all">Todos</option>
+                    <option value="long">🟢 LONG</option>
+                    <option value="short">🔴 SHORT</option>
+                  </select>
+                </div>
+
+                {/* Filtro por Status */}
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Status</label>
+                  <select
+                    value={tradesStatusFilter}
+                    onChange={(e) => { setTradesStatusFilter(e.target.value); setTradesCurrentPage(1); }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="all">Todos</option>
+                    <option value="win">✅ WIN</option>
+                    <option value="loss">❌ LOSS</option>
+                  </select>
+                </div>
+
+                {/* Filtro por Data Início */}
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Data Início</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="date"
+                      value={tradesDateStart}
+                      onChange={(e) => { setTradesDateStart(e.target.value); setTradesCurrentPage(1); }}
+                      className="w-full bg-slate-900 border border-slate-700 rounded pl-10 pr-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Filtro por Data Fim */}
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Data Fim</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="date"
+                      value={tradesDateEnd}
+                      onChange={(e) => { setTradesDateEnd(e.target.value); setTradesCurrentPage(1); }}
+                      className="w-full bg-slate-900 border border-slate-700 rounded pl-10 pr-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Botões Reset e Export */}
+                <div className="flex items-end gap-2">
+                  <button
+                    onClick={resetTradesFilters}
+                    className="flex-1 flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-sm"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Reset
+                  </button>
+                  <button
+                    onClick={exportTradesCSV}
+                    className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 px-3 py-2 rounded text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabela de Trades */}
+            {isLoadingTrades ? (
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
+                <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-3" />
+                <p className="text-slate-400">Carregando trades...</p>
+              </div>
+            ) : getPaginatedTrades().length === 0 ? (
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
+                <Activity className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                <p className="text-slate-400 text-lg">Nenhum trade encontrado</p>
+                <p className="text-slate-500 text-sm mt-2">Tente ajustar os filtros</p>
+              </div>
+            ) : (
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto" style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                  <table className="w-full text-sm">
+                    <thead className="sticky-header">
+                      <tr className="border-b-2 border-blue-500/50">
+                        <th className="text-left py-3 px-3 text-slate-400">
+                          <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleTradesSort('timestamp')}>
+                            TIMESTAMP <SortIconTrades field="timestamp" />
+                          </div>
+                        </th>
+                        <th className="text-left py-3 px-3 text-slate-400">
+                          <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleTradesSort('whale')}>
+                            WHALE <SortIconTrades field="whale" />
+                          </div>
+                        </th>
+                        <th className="text-left py-3 px-3 text-slate-400">
+                          <div className="flex items-center gap-2 cursor-pointer" onClick={() => handleTradesSort('token')}>
+                            TOKEN <SortIconTrades field="token" />
+                          </div>
+                        </th>
+                        <th className="text-center py-3 px-3 text-slate-400">
+                          <div className="flex items-center justify-center gap-2 cursor-pointer" onClick={() => handleTradesSort('type')}>
+                            TYPE <SortIconTrades field="type" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer" onClick={() => handleTradesSort('entry')}>
+                            ENTRY <SortIconTrades field="entry" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer" onClick={() => handleTradesSort('size')}>
+                            SIZE <SortIconTrades field="size" />
+                          </div>
+                        </th>
+                        <th className="text-right py-3 px-3 text-slate-400">
+                          <div className="flex items-center justify-end gap-2 cursor-pointer" onClick={() => handleTradesSort('pnl')}>
+                            P&L <SortIconTrades field="pnl" />
+                          </div>
+                        </th>
+                        <th className="text-center py-3 px-3 text-slate-400">STATUS</th>
+                        <th className="text-center py-3 px-3 text-slate-400">AÇÕES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getPaginatedTrades().map((trade, idx) => {
+                        const pnl = parseFloat(trade.closedPnl || trade.closed_pnl || trade.pnl || 0);
+                        const status = pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'NEUTRAL';
+                        const side = (trade.side || '').toLowerCase();
+                        const isLong = side.includes('long') || side.includes('buy');
+                        const whale = whalesData.find(w => w.address === trade.wallet_address);
+                        const nickname = whale?.nickname || trade.wallet_address?.slice(0, 8) || 'Unknown';
+                        const timestamp = new Date(trade.time || trade.timestamp);
+                        const size = parseFloat(trade.sz || trade.size || 0);
+                        const entryPrice = parseFloat(trade.px || trade.entry_price || 0);
+                        
+                        return (
+                          <tr key={`${trade.wallet_address}-${trade.coin}-${idx}`} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                            <td className="py-2 px-3 font-mono text-xs">
+                              <div>{timestamp.toLocaleDateString('pt-BR')}</div>
+                              <div className="text-slate-500">{timestamp.toLocaleTimeString('pt-BR')}</div>
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="font-semibold">{nickname}</div>
+                              <div className="text-xs text-slate-400 font-mono">
+                                {trade.wallet_address?.slice(0, 6)}...{trade.wallet_address?.slice(-4)}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 font-bold text-blue-400">{trade.coin || 'N/A'}</td>
+                            <td className="text-center py-2 px-3">
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                isLong ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'
+                              }`}>
+                                {isLong ? '🟢 LONG' : '🔴 SHORT'}
+                              </span>
+                            </td>
+                            <td className="text-right py-2 px-3 font-mono">${entryPrice.toFixed(2)}</td>
+                            <td className="text-right py-2 px-3 font-mono">{size.toFixed(4)}</td>
+                            <td className={`text-right py-2 px-3 font-bold ${
+                              pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {formatCurrencyExact(pnl)}
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                status === 'WIN' ? 'bg-green-500/20 text-green-400' :
+                                status === 'LOSS' ? 'bg-red-500/20 text-red-400' :
+                                'bg-slate-500/20 text-slate-400'
+                              }`}>
+                                {status === 'WIN' ? '✅ WIN' : status === 'LOSS' ? '❌ LOSS' : '➖ NEUTRAL'}
+                              </span>
+                            </td>
+                            <td className="text-center py-2 px-3">
+                              <a 
+                                href={`https://hypurrscan.io/address/${trade.wallet_address}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-blue-400 hover:text-blue-300"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Paginação */}
+                {getTotalPages() > 1 && (
+                  <div className="flex items-center justify-between p-4 border-t border-slate-700">
+                    <div className="text-sm text-slate-400">
+                      Página {tradesCurrentPage} de {getTotalPages()} • 
+                      Mostrando {((tradesCurrentPage - 1) * tradesPerPage) + 1} - {Math.min(tradesCurrentPage * tradesPerPage, getFilteredTrades().length)} de {getFilteredTrades().length} trades
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setTradesCurrentPage(1)}
+                        disabled={tradesCurrentPage === 1}
+                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Primeira
+                      </button>
+                      <button
+                        onClick={() => setTradesCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={tradesCurrentPage === 1}
+                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        ← Anterior
+                      </button>
+                      <button
+                        onClick={() => setTradesCurrentPage(p => Math.min(getTotalPages(), p + 1))}
+                        disabled={tradesCurrentPage === getTotalPages()}
+                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Próxima →
+                      </button>
+                      <button
+                        onClick={() => setTradesCurrentPage(getTotalPages())}
+                        disabled={tradesCurrentPage === getTotalPages()}
+                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Última
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === 'ai-token' && (
           <div className="space-y-4">
             <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-6">
@@ -1281,7 +1977,7 @@ export default function HyperliquidPro() {
                     🤖 Análise Agregada por Token com IA
                   </h2>
                   <p className="text-sm text-slate-400 mt-1">
-                    {getSortedTokens().length} tokens com posições abertas • Confidence Score Ativo
+                    {getSortedTokens().length} tokens com posições abertas • Confidence Score Ativo • ✅ Preços Corrigidos
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -1473,15 +2169,15 @@ export default function HyperliquidPro() {
                             <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/30">
                               <h4 className="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">
                                 <DollarSign className="w-4 h-4" />
-                                💡 Análise de Preço {token.hasPriceData ? '✅ DADOS REAIS' : '⚠️ SEM PREÇO DE MERCADO'}
+                                💡 Análise de Preço (✅ CORRIGIDO)
                               </h4>
                               <div className="grid grid-cols-3 gap-4 text-sm mb-3">
                                 <div>
-                                  <div className="text-slate-400 text-xs mb-1">Preço Atual</div>
+                                  <div className="text-slate-400 text-xs mb-1">Preço Atual (markPx)</div>
                                   <div className="font-bold text-white">${token.currentPrice.toFixed(2)}</div>
                                 </div>
                                 <div>
-                                  <div className="text-slate-400 text-xs mb-1">Preço Médio Whales</div>
+                                  <div className="text-slate-400 text-xs mb-1">Preço Médio Whales (entry)</div>
                                   <div className="font-bold text-blue-400">${token.avgEntryPrice.toFixed(2)}</div>
                                 </div>
                                 <div>
@@ -1491,17 +2187,11 @@ export default function HyperliquidPro() {
                                   </div>
                                 </div>
                               </div>
-                              {token.hasPriceData ? (
-                                <div className={`text-xs p-3 rounded ${token.avgProfitPct >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                                  {token.avgProfitPct >= 0 ? '✅' : '⚠️'} {token.avgProfitPct >= 0
-                                    ? `Whales estão em lucro. Você entraria $${(token.currentPrice - token.avgEntryPrice).toFixed(2)} acima delas.`
-                                    : `Whales estão em prejuízo. Você entraria $${Math.abs(token.currentPrice - token.avgEntryPrice).toFixed(2)} abaixo delas.`}
-                                </div>
-                              ) : (
-                                <div className="text-xs p-3 rounded bg-yellow-500/20 text-yellow-300">
-                                  ⚠️ Preço de mercado indisponível. Usando preço de entrada como referência.
-                                </div>
-                              )}
+                              <div className={`text-xs p-3 rounded ${token.avgProfitPct >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                                {token.avgProfitPct >= 0 ? '✅' : '⚠️'} {token.avgProfitPct >= 0
+                                  ? `Whales estão em lucro. Você entraria $${(token.currentPrice - token.avgEntryPrice).toFixed(2)} acima delas.`
+                                  : `Whales estão em prejuízo. Você entraria $${Math.abs(token.currentPrice - token.avgEntryPrice).toFixed(2)} abaixo delas.`}
+                              </div>
                             </div>
 
                             <div className={`rounded-lg p-4 border ${
@@ -1600,13 +2290,6 @@ export default function HyperliquidPro() {
           </div>
         )}
 
-        {tab === 'trades' && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
-            <Activity className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-400 text-lg">Trade History - Em breve</p>
-          </div>
-        )}
-
         {tab === 'ai-wallet' && (
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
             <Brain className="w-16 h-16 text-slate-600 mx-auto mb-4" />
@@ -1641,6 +2324,20 @@ export default function HyperliquidPro() {
             <p className="text-slate-400 text-lg">Whale Leaderboard - Em breve</p>
           </div>
         )}
+      </div>
+
+      {/* ============================================ */}
+      {/* 🆕 FASE 6.2 - DISCLAIMER NO FOOTER */}
+      {/* ============================================ */}
+      <div className="max-w-[1900px] mx-auto px-4 pb-4 mt-8">
+        <div className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4 text-center text-xs text-slate-400">
+          <p className="font-semibold mb-1">⚠️ DISCLAIMER</p>
+          <p>
+            This tool is for informational and educational purposes only. It is NOT financial advice. 
+            Cryptocurrency trading involves substantial risk of loss. Always do your own research (DYOR) before making any investment decisions.
+            The data provided may contain inaccuracies or delays. Past performance does not guarantee future results.
+          </p>
+        </div>
       </div>
 
       {showAddModal && (
