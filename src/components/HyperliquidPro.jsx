@@ -480,12 +480,15 @@ export default function HyperliquidPro() {
     const entryPrices = positions.map(pos => parseFloat(pos.entryPx || pos.entry_px || 0)).filter(p => p > 0);
     const avgEntryPrice = entryPrices.length > 0 ? entryPrices.reduce((s, p) => s + p, 0) / entryPrices.length : 0;
     
+    // ✅ CORREÇÃO DO BUG: Usar markPx do backend ao invés de fallback para entryPx
     const markPrices = positions.map(pos => parseFloat(pos.markPx || 0)).filter(p => p > 0);
     const currentPrice = markPrices.length > 0 
       ? markPrices.reduce((s, p) => s + p, 0) / markPrices.length 
-      : (entryPrices[0] || 0);
+      : 0;
+    const finalCurrentPrice = currentPrice > 0 ? currentPrice : (entryPrices[0] || 0);
+    const hasPriceData = markPrices.length > 0;
     
-    const avgProfitPct = currentPrice && avgEntryPrice ? ((currentPrice - avgEntryPrice) / avgEntryPrice) * 100 : 0;
+    const avgProfitPct = finalCurrentPrice && avgEntryPrice ? ((finalCurrentPrice - avgEntryPrice) / avgEntryPrice) * 100 : 0;
     const portfolioPercent = (tokenData.totalVolume / 10000000) * 100;
     
     let confidence = 50;
@@ -514,7 +517,23 @@ export default function HyperliquidPro() {
       signal = 'SELL'; signalColor = 'orange'; signalIcon = '🟠';
     }
     
-    return { avgSize, avgLeverage, concentration, avgLiquidationDistance, cascadeRisk, avgEntryPrice, currentPrice, avgProfitPct, portfolioPercent, confidence, signal, signalColor, signalIcon, momentum: 'STABLE' };
+    return { 
+      avgSize, 
+      avgLeverage, 
+      concentration, 
+      avgLiquidationDistance, 
+      cascadeRisk, 
+      avgEntryPrice, 
+      currentPrice: finalCurrentPrice, 
+      avgProfitPct, 
+      portfolioPercent, 
+      confidence, 
+      signal, 
+      signalColor, 
+      signalIcon, 
+      momentum: 'STABLE',
+      hasPriceData
+    };
   };
   
   const getTokensAggregated = () => {
@@ -1262,7 +1281,7 @@ export default function HyperliquidPro() {
                     🤖 Análise Agregada por Token com IA
                   </h2>
                   <p className="text-sm text-slate-400 mt-1">
-                    {getSortedTokens().length} tokens com posições abertas • Confidence Score Ativo • ✅ Preços Corrigidos
+                    {getSortedTokens().length} tokens com posições abertas • Confidence Score Ativo
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -1454,15 +1473,15 @@ export default function HyperliquidPro() {
                             <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-4 border border-blue-500/30">
                               <h4 className="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">
                                 <DollarSign className="w-4 h-4" />
-                                💡 Análise de Preço (✅ CORRIGIDO)
+                                💡 Análise de Preço {token.hasPriceData ? '✅ DADOS REAIS' : '⚠️ SEM PREÇO DE MERCADO'}
                               </h4>
                               <div className="grid grid-cols-3 gap-4 text-sm mb-3">
                                 <div>
-                                  <div className="text-slate-400 text-xs mb-1">Preço Atual (markPx)</div>
+                                  <div className="text-slate-400 text-xs mb-1">Preço Atual</div>
                                   <div className="font-bold text-white">${token.currentPrice.toFixed(2)}</div>
                                 </div>
                                 <div>
-                                  <div className="text-slate-400 text-xs mb-1">Preço Médio Whales (entry)</div>
+                                  <div className="text-slate-400 text-xs mb-1">Preço Médio Whales</div>
                                   <div className="font-bold text-blue-400">${token.avgEntryPrice.toFixed(2)}</div>
                                 </div>
                                 <div>
@@ -1472,11 +1491,17 @@ export default function HyperliquidPro() {
                                   </div>
                                 </div>
                               </div>
-                              <div className={`text-xs p-3 rounded ${token.avgProfitPct >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                                {token.avgProfitPct >= 0 ? '✅' : '⚠️'} {token.avgProfitPct >= 0
-                                  ? `Whales estão em lucro. Você entraria $${(token.currentPrice - token.avgEntryPrice).toFixed(2)} acima delas.`
-                                  : `Whales estão em prejuízo. Você entraria $${Math.abs(token.currentPrice - token.avgEntryPrice).toFixed(2)} abaixo delas.`}
-                              </div>
+                              {token.hasPriceData ? (
+                                <div className={`text-xs p-3 rounded ${token.avgProfitPct >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                                  {token.avgProfitPct >= 0 ? '✅' : '⚠️'} {token.avgProfitPct >= 0
+                                    ? `Whales estão em lucro. Você entraria $${(token.currentPrice - token.avgEntryPrice).toFixed(2)} acima delas.`
+                                    : `Whales estão em prejuízo. Você entraria $${Math.abs(token.currentPrice - token.avgEntryPrice).toFixed(2)} abaixo delas.`}
+                                </div>
+                              ) : (
+                                <div className="text-xs p-3 rounded bg-yellow-500/20 text-yellow-300">
+                                  ⚠️ Preço de mercado indisponível. Usando preço de entrada como referência.
+                                </div>
+                              )}
                             </div>
 
                             <div className={`rounded-lg p-4 border ${
