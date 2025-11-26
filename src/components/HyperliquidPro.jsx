@@ -287,43 +287,38 @@ export default function HyperliquidPro() {
   };
 
   // ============================================
-  // HELPER: Mapear campos do trade de forma robusta
+  // HELPER: Mapear campos do trade (BASEADO NA ESTRUTURA REAL DO BACKEND)
+  // Campos disponíveis: ['id', 'wallet', 'nickname', 'token', 'side', 'size', 
+  //                      'entry_price', 'exit_price', 'pnl', 'leverage', 
+  //                      'open_timestamp', 'close_timestamp', 'status', 'created_at']
   // ============================================
-  const getTradeField = (trade, possibleFields) => {
-    for (const field of possibleFields) {
-      if (trade[field] !== null && trade[field] !== undefined && trade[field] !== '') {
-        return trade[field];
-      }
-    }
-    return null;
-  };
-
+  
   const getTradeWalletAddress = (trade) => {
-    return getTradeField(trade, ['wallet_address', 'wallet', 'user', 'address', 'account']);
+    return trade.wallet || null;
   };
 
   const getTradeToken = (trade) => {
-    return getTradeField(trade, ['coin', 'token', 'symbol', 'asset']);
+    return trade.token || null;
   };
 
   const getTradeTimestamp = (trade) => {
-    return getTradeField(trade, ['open_timestamp', 'timestamp', 'time', 'created_at', 'date']);
+    return trade.open_timestamp || null;
   };
 
   const getTradeSide = (trade) => {
-    return getTradeField(trade, ['side', 'direction', 'type']);
+    return trade.side || null;
   };
 
   const getTradeEntryPrice = (trade) => {
-    return getTradeField(trade, ['entry_price', 'px', 'price', 'open_price']);
+    return trade.entry_price || null;
   };
 
   const getTradeSize = (trade) => {
-    return getTradeField(trade, ['size', 'sz', 'amount', 'quantity']);
+    return trade.size || null;
   };
 
   const getTradePnL = (trade) => {
-    return getTradeField(trade, ['closed_pnl', 'pnl', 'profit', 'profit_loss']);
+    return trade.pnl || null;
   };
 
   // ============================================
@@ -346,12 +341,6 @@ export default function HyperliquidPro() {
       const data = await response.json();
       const tradesArray = Array.isArray(data) ? data : (data?.trades || []);
       
-      // 🔍 DEBUG: Ver estrutura REAL dos dados
-      if (tradesArray.length > 0) {
-        console.log('📊 ESTRUTURA DO PRIMEIRO TRADE:', tradesArray[0]);
-        console.log('📊 CAMPOS DISPONÍVEIS:', Object.keys(tradesArray[0]));
-      }
-      
       setTradesData(tradesArray);
       setTradesLastUpdate(new Date());
       console.log('✅ Trades carregados:', tradesArray.length);
@@ -362,6 +351,61 @@ export default function HyperliquidPro() {
     } finally {
       setIsLoadingTrades(false);
     }
+  };
+
+  // ============================================
+  // FUNÇÕES GRÁFICOS TRADES TAB
+  // ============================================
+  
+  const getTradesChartData = () => {
+    const trades = getSortedTrades();
+    
+    // P&L Over Time
+    let cumulativePnL = 0;
+    const pnlOverTime = trades.map((trade, idx) => {
+      const pnl = parseFloat(getTradePnL(trade) || 0);
+      cumulativePnL += pnl;
+      const timestamp = getTradeTimestamp(trade);
+      return {
+        index: idx + 1,
+        date: timestamp ? new Date(timestamp).toLocaleDateString('pt-BR', { day: '2d', month: '2d' }) : 'N/A',
+        pnl: cumulativePnL,
+        tradePnL: pnl
+      };
+    });
+    
+    // Win Rate Data
+    const metrics = calculateTradesMetrics();
+    const winRateData = [
+      { name: 'Wins', value: metrics.wins, fill: '#10b981' },
+      { name: 'Losses', value: metrics.losses, fill: '#ef4444' }
+    ];
+    
+    // Volume by Day
+    const volumeByDay = {};
+    trades.forEach(trade => {
+      const timestamp = getTradeTimestamp(trade);
+      if (timestamp) {
+        const date = new Date(timestamp).toLocaleDateString('pt-BR', { day: '2d', month: '2d' });
+        volumeByDay[date] = (volumeByDay[date] || 0) + 1;
+      }
+    });
+    const volumeData = Object.entries(volumeByDay).map(([date, count]) => ({
+      date,
+      trades: count
+    }));
+    
+    // P&L Distribution
+    const pnlDistribution = trades.map((trade, idx) => {
+      const pnl = parseFloat(getTradePnL(trade) || 0);
+      return {
+        index: idx + 1,
+        pnl: pnl,
+        type: pnl > 0 ? 'win' : 'loss'
+      };
+    });
+    
+    return { pnlOverTime, winRateData, volumeData, pnlDistribution };
   };
 
   // ============================================
@@ -1739,6 +1783,222 @@ export default function HyperliquidPro() {
                   <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
                     <p className="text-slate-400 text-xs uppercase mb-1">Worst Trade</p>
                     <p className="text-2xl font-bold text-red-400">{formatCurrencyExact(metrics.worstTrade)}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ============================================ */}
+            {/* 📊 GRÁFICOS INSTITUCIONAIS - FASE 6 FINAL */}
+            {/* ============================================ */}
+            {!isLoadingTrades && tradesData.length > 0 && (() => {
+              const chartData = getTradesChartData();
+              return (
+                <div className="bg-gradient-to-r from-blue-500/5 to-purple-500/5 border border-slate-700/50 rounded-lg p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <BarChart3 className="w-6 h-6 text-blue-400" />
+                    <h3 className="text-xl font-bold">📊 Performance Analytics</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Gráfico 1: P&L Over Time */}
+                    <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700/50">
+                      <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-green-400" />
+                        P&L Acumulado Over Time
+                      </h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={chartData.pnlOverTime}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis 
+                            dataKey="date" 
+                            stroke="#94a3b8" 
+                            style={{ fontSize: '10px' }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                          />
+                          <YAxis 
+                            stroke="#94a3b8" 
+                            style={{ fontSize: '10px' }}
+                            tickFormatter={(value) => formatCurrency(value)}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#1e293b', 
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              fontSize: '12px'
+                            }}
+                            formatter={(value) => [formatCurrencyExact(value), 'P&L Acumulado']}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="pnl" 
+                            stroke="#10b981" 
+                            strokeWidth={2}
+                            dot={{ fill: '#10b981', r: 3 }}
+                            activeDot={{ r: 5 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Gráfico 2: Win Rate Distribution */}
+                    <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700/50">
+                      <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                        <Award className="w-4 h-4 text-yellow-400" />
+                        Win Rate Distribution
+                      </h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <PieChart>
+                          <Pie
+                            data={chartData.winRateData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, value, percent }) => 
+                              `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
+                            }
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {chartData.winRateData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#1e293b', 
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              fontSize: '12px'
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Gráfico 3: Volume por Dia */}
+                    <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700/50">
+                      <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-blue-400" />
+                        Volume de Trades por Dia
+                      </h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={chartData.volumeData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis 
+                            dataKey="date" 
+                            stroke="#94a3b8" 
+                            style={{ fontSize: '10px' }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                          />
+                          <YAxis 
+                            stroke="#94a3b8" 
+                            style={{ fontSize: '10px' }}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#1e293b', 
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              fontSize: '12px'
+                            }}
+                            formatter={(value) => [value, 'Trades']}
+                          />
+                          <Bar dataKey="trades" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Gráfico 4: P&L Distribution */}
+                    <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-700/50">
+                      <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-purple-400" />
+                        P&L Individual por Trade
+                      </h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={chartData.pnlDistribution}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis 
+                            dataKey="index" 
+                            stroke="#94a3b8" 
+                            style={{ fontSize: '10px' }}
+                            label={{ value: 'Trade #', position: 'insideBottom', offset: -5, style: { fontSize: '10px', fill: '#94a3b8' } }}
+                          />
+                          <YAxis 
+                            stroke="#94a3b8" 
+                            style={{ fontSize: '10px' }}
+                            tickFormatter={(value) => formatCurrency(value)}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#1e293b', 
+                              border: '1px solid #334155',
+                              borderRadius: '8px',
+                              fontSize: '12px'
+                            }}
+                            formatter={(value) => [formatCurrencyExact(value), 'P&L']}
+                          />
+                          <Bar 
+                            dataKey="pnl" 
+                            fill="#8b5cf6"
+                            radius={[4, 4, 0, 0]}
+                          >
+                            {chartData.pnlDistribution.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.type === 'win' ? '#10b981' : '#ef4444'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Insights Rápidos */}
+                  <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gradient-to-r from-green-500/10 to-green-500/5 border border-green-500/30 rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <TrendingUp className="w-5 h-5 text-green-400" />
+                        <h5 className="font-bold text-green-400">Performance Trend</h5>
+                      </div>
+                      <p className="text-sm text-slate-300">
+                        {chartData.pnlOverTime.length > 0 && chartData.pnlOverTime[chartData.pnlOverTime.length - 1].pnl > 0
+                          ? '✅ P&L acumulado POSITIVO - Estratégia lucrativa'
+                          : '⚠️ P&L acumulado NEGATIVO - Revisar estratégia'}
+                      </p>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-blue-500/10 to-blue-500/5 border border-blue-500/30 rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Activity className="w-5 h-5 text-blue-400" />
+                        <h5 className="font-bold text-blue-400">Trading Activity</h5>
+                      </div>
+                      <p className="text-sm text-slate-300">
+                        {chartData.volumeData.length > 0
+                          ? `📊 Média de ${(chartData.pnlDistribution.length / chartData.volumeData.length).toFixed(1)} trades/dia`
+                          : '📊 Sem dados suficientes'}
+                      </p>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-purple-500/10 to-purple-500/5 border border-purple-500/30 rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Award className="w-5 h-5 text-purple-400" />
+                        <h5 className="font-bold text-purple-400">Consistency Score</h5>
+                      </div>
+                      <p className="text-sm text-slate-300">
+                        {(() => {
+                          const metrics = calculateTradesMetrics();
+                          if (metrics.winRate >= 70) return '🏆 EXCELENTE - Win rate acima de 70%';
+                          if (metrics.winRate >= 55) return '✅ BOM - Win rate saudável';
+                          if (metrics.winRate >= 45) return '⚠️ MÉDIO - Melhorar seleção';
+                          return '🔴 BAIXO - Revisar estratégia urgente';
+                        })()}
+                      </p>
+                    </div>
                   </div>
                 </div>
               );
