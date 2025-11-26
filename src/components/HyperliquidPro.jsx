@@ -287,6 +287,46 @@ export default function HyperliquidPro() {
   };
 
   // ============================================
+  // HELPER: Mapear campos do trade de forma robusta
+  // ============================================
+  const getTradeField = (trade, possibleFields) => {
+    for (const field of possibleFields) {
+      if (trade[field] !== null && trade[field] !== undefined && trade[field] !== '') {
+        return trade[field];
+      }
+    }
+    return null;
+  };
+
+  const getTradeWalletAddress = (trade) => {
+    return getTradeField(trade, ['wallet_address', 'wallet', 'user', 'address', 'account']);
+  };
+
+  const getTradeToken = (trade) => {
+    return getTradeField(trade, ['coin', 'token', 'symbol', 'asset']);
+  };
+
+  const getTradeTimestamp = (trade) => {
+    return getTradeField(trade, ['open_timestamp', 'timestamp', 'time', 'created_at', 'date']);
+  };
+
+  const getTradeSide = (trade) => {
+    return getTradeField(trade, ['side', 'direction', 'type']);
+  };
+
+  const getTradeEntryPrice = (trade) => {
+    return getTradeField(trade, ['entry_price', 'px', 'price', 'open_price']);
+  };
+
+  const getTradeSize = (trade) => {
+    return getTradeField(trade, ['size', 'sz', 'amount', 'quantity']);
+  };
+
+  const getTradePnL = (trade) => {
+    return getTradeField(trade, ['closed_pnl', 'pnl', 'profit', 'profit_loss']);
+  };
+
+  // ============================================
   // FETCH TRADES - MAPEAMENTO CORRETO
   // ============================================
   const fetchTrades = async (limit = 1000) => {
@@ -305,6 +345,12 @@ export default function HyperliquidPro() {
 
       const data = await response.json();
       const tradesArray = Array.isArray(data) ? data : (data?.trades || []);
+      
+      // 🔍 DEBUG: Ver estrutura REAL dos dados
+      if (tradesArray.length > 0) {
+        console.log('📊 ESTRUTURA DO PRIMEIRO TRADE:', tradesArray[0]);
+        console.log('📊 CAMPOS DISPONÍVEIS:', Object.keys(tradesArray[0]));
+      }
       
       setTradesData(tradesArray);
       setTradesLastUpdate(new Date());
@@ -326,19 +372,20 @@ export default function HyperliquidPro() {
     let filtered = [...tradesData];
     
     if (tradesWhaleFilter !== 'all') {
-      filtered = filtered.filter(t => t.wallet_address === tradesWhaleFilter);
+      filtered = filtered.filter(t => getTradeWalletAddress(t) === tradesWhaleFilter);
     }
     
     if (tradesTokenFilter.trim()) {
       const searchTerm = tradesTokenFilter.toLowerCase().trim();
-      filtered = filtered.filter(t => 
-        (t.coin || '').toLowerCase().includes(searchTerm)
-      );
+      filtered = filtered.filter(t => {
+        const token = getTradeToken(t);
+        return token && token.toLowerCase().includes(searchTerm);
+      });
     }
     
     if (tradesTypeFilter !== 'all') {
       filtered = filtered.filter(t => {
-        const side = (t.side || '').toLowerCase();
+        const side = (getTradeSide(t) || '').toLowerCase();
         if (tradesTypeFilter === 'long') {
           return side.includes('long') || side.includes('buy');
         } else if (tradesTypeFilter === 'short') {
@@ -350,7 +397,7 @@ export default function HyperliquidPro() {
     
     if (tradesStatusFilter !== 'all') {
       filtered = filtered.filter(t => {
-        const pnl = parseFloat(t.closed_pnl || t.pnl || 0);
+        const pnl = parseFloat(getTradePnL(t) || 0);
         if (tradesStatusFilter === 'win') return pnl > 0;
         if (tradesStatusFilter === 'loss') return pnl < 0;
         return true;
@@ -360,7 +407,9 @@ export default function HyperliquidPro() {
     if (tradesDateStart) {
       const startDate = new Date(tradesDateStart);
       filtered = filtered.filter(t => {
-        const tradeDate = new Date(t.open_timestamp || t.time || t.timestamp);
+        const timestamp = getTradeTimestamp(t);
+        if (!timestamp) return false;
+        const tradeDate = new Date(timestamp);
         return tradeDate >= startDate;
       });
     }
@@ -369,7 +418,9 @@ export default function HyperliquidPro() {
       const endDate = new Date(tradesDateEnd);
       endDate.setHours(23, 59, 59, 999);
       filtered = filtered.filter(t => {
-        const tradeDate = new Date(t.open_timestamp || t.time || t.timestamp);
+        const timestamp = getTradeTimestamp(t);
+        if (!timestamp) return false;
+        const tradeDate = new Date(timestamp);
         return tradeDate <= endDate;
       });
     }
@@ -385,32 +436,34 @@ export default function HyperliquidPro() {
       
       switch (tradesSortField) {
         case 'timestamp':
-          aValue = new Date(a.open_timestamp || a.time || a.timestamp).getTime();
-          bValue = new Date(b.open_timestamp || b.time || b.timestamp).getTime();
+          const aTime = getTradeTimestamp(a);
+          const bTime = getTradeTimestamp(b);
+          aValue = aTime ? new Date(aTime).getTime() : 0;
+          bValue = bTime ? new Date(bTime).getTime() : 0;
           break;
         case 'whale':
-          aValue = a.wallet_address || '';
-          bValue = b.wallet_address || '';
+          aValue = getTradeWalletAddress(a) || '';
+          bValue = getTradeWalletAddress(b) || '';
           break;
         case 'token':
-          aValue = a.coin || '';
-          bValue = b.coin || '';
+          aValue = getTradeToken(a) || '';
+          bValue = getTradeToken(b) || '';
           break;
         case 'type':
-          aValue = (a.side || '').toLowerCase();
-          bValue = (b.side || '').toLowerCase();
+          aValue = (getTradeSide(a) || '').toLowerCase();
+          bValue = (getTradeSide(b) || '').toLowerCase();
           break;
         case 'entry':
-          aValue = parseFloat(a.entry_price || a.px || 0);
-          bValue = parseFloat(b.entry_price || b.px || 0);
+          aValue = parseFloat(getTradeEntryPrice(a) || 0);
+          bValue = parseFloat(getTradeEntryPrice(b) || 0);
           break;
         case 'size':
-          aValue = parseFloat(a.size || a.sz || 0);
-          bValue = parseFloat(b.size || b.sz || 0);
+          aValue = parseFloat(getTradeSize(a) || 0);
+          bValue = parseFloat(getTradeSize(b) || 0);
           break;
         case 'pnl':
-          aValue = parseFloat(a.closed_pnl || a.pnl || 0);
-          bValue = parseFloat(b.closed_pnl || b.pnl || 0);
+          aValue = parseFloat(getTradePnL(a) || 0);
+          bValue = parseFloat(getTradePnL(b) || 0);
           break;
         default:
           return 0;
@@ -467,18 +520,20 @@ export default function HyperliquidPro() {
     const headers = ['Timestamp', 'Whale', 'Token', 'Type', 'Entry Price', 'Size', 'PnL', 'Status'];
     
     const rows = trades.map(trade => {
-      const pnl = parseFloat(trade.closed_pnl || trade.pnl || 0);
+      const pnl = parseFloat(getTradePnL(trade) || 0);
       const status = pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'NEUTRAL';
-      const whale = whalesData.find(w => w.address === trade.wallet_address);
-      const nickname = whale?.nickname || trade.wallet_address?.slice(0, 8) || 'Unknown';
+      const walletAddr = getTradeWalletAddress(trade);
+      const whale = whalesData.find(w => w.address === walletAddr);
+      const nickname = whale?.nickname || walletAddr?.slice(0, 8) || 'Unknown';
+      const timestamp = getTradeTimestamp(trade);
       
       return [
-        new Date(trade.open_timestamp || trade.time || trade.timestamp).toISOString(),
+        timestamp ? new Date(timestamp).toISOString() : 'N/A',
         nickname,
-        trade.coin || 'N/A',
-        trade.side || 'N/A',
-        trade.entry_price || trade.px || 0,
-        trade.size || trade.sz || 0,
+        getTradeToken(trade) || 'N/A',
+        getTradeSide(trade) || 'N/A',
+        getTradeEntryPrice(trade) || 0,
+        getTradeSize(trade) || 0,
         pnl.toFixed(2),
         status
       ];
@@ -520,8 +575,8 @@ export default function HyperliquidPro() {
     let totalSize = 0;
     
     trades.forEach(trade => {
-      const pnl = parseFloat(trade.closed_pnl || trade.pnl || 0);
-      const size = parseFloat(trade.size || trade.sz || 0) * parseFloat(trade.entry_price || trade.px || 0);
+      const pnl = parseFloat(getTradePnL(trade) || 0);
+      const size = parseFloat(getTradeSize(trade) || 0) * parseFloat(getTradeEntryPrice(trade) || 0);
       
       totalPnL += pnl;
       totalSize += size;
@@ -1855,29 +1910,43 @@ export default function HyperliquidPro() {
                     </thead>
                     <tbody>
                       {getPaginatedTrades().map((trade, idx) => {
-                        const pnl = parseFloat(trade.closed_pnl || trade.pnl || 0);
+                        const pnl = parseFloat(getTradePnL(trade) || 0);
                         const status = pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'NEUTRAL';
-                        const side = (trade.side || '').toLowerCase();
+                        const side = (getTradeSide(trade) || '').toLowerCase();
                         const isLong = side.includes('long') || side.includes('buy');
-                        const whale = whalesData.find(w => w.address === trade.wallet_address);
-                        const nickname = whale?.nickname || trade.wallet_address?.slice(0, 8) || 'Unknown';
-                        const timestamp = new Date(trade.open_timestamp || trade.time || trade.timestamp);
-                        const size = parseFloat(trade.size || trade.sz || 0);
-                        const entryPrice = parseFloat(trade.entry_price || trade.px || 0);
+                        
+                        const walletAddr = getTradeWalletAddress(trade);
+                        const whale = whalesData.find(w => w.address === walletAddr);
+                        const nickname = whale?.nickname || (walletAddr ? walletAddr.slice(0, 8) : 'Unknown');
+                        
+                        const timestampValue = getTradeTimestamp(trade);
+                        const timestamp = timestampValue ? new Date(timestampValue) : null;
+                        
+                        const size = parseFloat(getTradeSize(trade) || 0);
+                        const entryPrice = parseFloat(getTradeEntryPrice(trade) || 0);
+                        const token = getTradeToken(trade) || 'N/A';
                         
                         return (
-                          <tr key={`${trade.wallet_address}-${trade.coin}-${idx}`} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                          <tr key={`${walletAddr}-${token}-${idx}`} className="border-b border-slate-700/30 hover:bg-slate-700/20">
                             <td className="py-2 px-3 font-mono text-xs">
-                              <div>{timestamp.toLocaleDateString('pt-BR')}</div>
-                              <div className="text-slate-500">{timestamp.toLocaleTimeString('pt-BR')}</div>
+                              {timestamp ? (
+                                <>
+                                  <div>{timestamp.toLocaleDateString('pt-BR')}</div>
+                                  <div className="text-slate-500">{timestamp.toLocaleTimeString('pt-BR')}</div>
+                                </>
+                              ) : (
+                                <div className="text-slate-500">N/A</div>
+                              )}
                             </td>
                             <td className="py-2 px-3">
                               <div className="font-semibold">{nickname}</div>
-                              <div className="text-xs text-slate-400 font-mono">
-                                {trade.wallet_address?.slice(0, 6)}...{trade.wallet_address?.slice(-4)}
-                              </div>
+                              {walletAddr && (
+                                <div className="text-xs text-slate-400 font-mono">
+                                  {walletAddr.slice(0, 6)}...{walletAddr.slice(-4)}
+                                </div>
+                              )}
                             </td>
-                            <td className="py-2 px-3 font-bold text-blue-400">{trade.coin || 'N/A'}</td>
+                            <td className="py-2 px-3 font-bold text-blue-400">{token}</td>
                             <td className="text-center py-2 px-3">
                               <span className={`px-2 py-1 rounded text-xs font-bold ${
                                 isLong ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'
@@ -1902,14 +1971,18 @@ export default function HyperliquidPro() {
                               </span>
                             </td>
                             <td className="text-center py-2 px-3">
-                              <a 
-                                href={`https://hypurrscan.io/address/${trade.wallet_address}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="text-blue-400 hover:text-blue-300"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
+                              {walletAddr ? (
+                                <a 
+                                  href={`https://hypurrscan.io/address/${walletAddr}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-blue-400 hover:text-blue-300"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              ) : (
+                                <span className="text-slate-600">-</span>
+                              )}
                             </td>
                           </tr>
                         );
