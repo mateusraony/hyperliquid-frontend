@@ -1,13 +1,15 @@
 // ============================================
-// HYPERLIQUID PRO TRACKER - FASE 6.1 + 6.2 ✅
-// FASE 6.1: Trades Tab COMPLETA
-// FASE 6.2: Polish Institucional (Timestamps, Indicators, Tooltips, MDD, Disclaimer)
+// HYPERLIQUID PRO TRACKER - FASE 6 ✅ CORRIGIDO
+// ✅ Trades Tab com mapeamento correto
+// ✅ Status indicator compacto com tooltip
+// ✅ Disclaimer removido
+// ✅ AI Token 100% intacta
 // Arquivo único - Cole tudo de uma vez
 // ============================================
 
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
-import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Send, Flame, Star, Download, Calendar, Search } from 'lucide-react';
+import { TrendingUp, TrendingDown, Bell, Activity, Target, Brain, Copy, Award, BarChart3, ArrowUpRight, ArrowDownRight, Eye, Filter, ExternalLink, Clock, Zap, Users, Settings, AlertTriangle, Shield, DollarSign, Layers, GitBranch, PlayCircle, ChevronDown, ChevronUp, Trash2, Plus, X, Check, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Send, Flame, Star, Download, Calendar, Search, Info } from 'lucide-react';
 
 const API_URL = 'https://hyperliquid-whale-backend.onrender.com';
 
@@ -67,9 +69,7 @@ export default function HyperliquidPro() {
   const [tokenSortDirection, setTokenSortDirection] = useState('desc');
   const [expandedTokenDetail, setExpandedTokenDetail] = useState(null);
 
-  // ============================================
-  // 🆕 FASE 6.1 - ESTADOS TRADES TAB
-  // ============================================
+  // ESTADOS TRADES TAB
   const [tradesData, setTradesData] = useState([]);
   const [isLoadingTrades, setIsLoadingTrades] = useState(false);
   const [tradesError, setTradesError] = useState(null);
@@ -78,8 +78,8 @@ export default function HyperliquidPro() {
   // Filtros
   const [tradesWhaleFilter, setTradesWhaleFilter] = useState('all');
   const [tradesTokenFilter, setTradesTokenFilter] = useState('');
-  const [tradesTypeFilter, setTradesTypeFilter] = useState('all'); // all, long, short
-  const [tradesStatusFilter, setTradesStatusFilter] = useState('all'); // all, win, loss
+  const [tradesTypeFilter, setTradesTypeFilter] = useState('all');
+  const [tradesStatusFilter, setTradesStatusFilter] = useState('all');
   const [tradesDateStart, setTradesDateStart] = useState('');
   const [tradesDateEnd, setTradesDateEnd] = useState('');
   
@@ -91,14 +91,17 @@ export default function HyperliquidPro() {
   const [tradesCurrentPage, setTradesCurrentPage] = useState(1);
   const tradesPerPage = 20;
 
-  // ⚠️ DADOS MOCKADOS - Liquidações detalhadas (backend ainda não retorna breakdown)
+  // Tooltip status
+  const [showStatusTooltip, setShowStatusTooltip] = useState(false);
+
+  // ⚠️ DADOS MOCKADOS - Liquidações detalhadas
   const liquidationData = {
     '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
     '1W': { total: 8920000, trades: 67, profit: 1890000, longs: 42, shorts: 25 },
     '1M': { total: 24500000, trades: 234, profit: 4870000, longs: 145, shorts: 89 },
   };
 
-  // ⚠️ DADOS MOCKADOS - Risk Dashboard (backend ainda não retorna)
+  // ⚠️ DADOS MOCKADOS - Risk Dashboard
   const riskMetrics = {
     capitalAtRisk: 98500,
     avgRR: 2.8,
@@ -107,7 +110,7 @@ export default function HyperliquidPro() {
   };
 
   // ============================================
-  // 🆕 FASE 6.2 - HELPER: Calcular "tempo atrás"
+  // HELPER: Calcular "tempo atrás"
   // ============================================
   const getTimeAgo = (date) => {
     if (!date) return 'nunca';
@@ -120,19 +123,19 @@ export default function HyperliquidPro() {
   };
 
   // ============================================
-  // 🆕 FASE 6.2 - HELPER: Status dos dados
+  // HELPER: Status dos dados
   // ============================================
   const getDataStatus = () => {
-    if (!lastUpdate) return { status: 'offline', color: 'red', icon: '🔴', text: 'OFFLINE' };
+    if (!lastUpdate) return { status: 'offline', color: 'red', icon: '🔴', text: 'OFFLINE', description: 'Sistema desconectado' };
     
     const secondsSinceUpdate = Math.floor((new Date() - lastUpdate) / 1000);
     
     if (secondsSinceUpdate < 60) {
-      return { status: 'live', color: 'green', icon: '🟢', text: 'LIVE DATA' };
-    } else if (secondsSinceUpdate < 300) { // 5 minutos
-      return { status: 'delayed', color: 'yellow', icon: '🟡', text: 'DELAYED' };
+      return { status: 'live', color: 'green', icon: '🟢', text: 'LIVE', description: 'Dados atualizados em tempo real' };
+    } else if (secondsSinceUpdate < 300) {
+      return { status: 'delayed', color: 'yellow', icon: '🟡', text: 'DELAYED', description: 'Dados com atraso de alguns minutos' };
     } else {
-      return { status: 'stale', color: 'red', icon: '🔴', text: 'STALE DATA' };
+      return { status: 'stale', color: 'red', icon: '🔴', text: 'STALE', description: 'Dados desatualizados - necessário refresh' };
     }
   };
 
@@ -284,7 +287,7 @@ export default function HyperliquidPro() {
   };
 
   // ============================================
-  // 🆕 FASE 6.1 - FETCH TRADES
+  // FETCH TRADES - MAPEAMENTO CORRETO
   // ============================================
   const fetchTrades = async (limit = 1000) => {
     console.log('🔄 Buscando trades...');
@@ -316,18 +319,16 @@ export default function HyperliquidPro() {
   };
 
   // ============================================
-  // 🆕 FASE 6.1 - FUNÇÕES TRADES TAB
+  // FUNÇÕES TRADES TAB
   // ============================================
   
   const getFilteredTrades = () => {
     let filtered = [...tradesData];
     
-    // Filtro por whale
     if (tradesWhaleFilter !== 'all') {
       filtered = filtered.filter(t => t.wallet_address === tradesWhaleFilter);
     }
     
-    // Filtro por token (busca parcial)
     if (tradesTokenFilter.trim()) {
       const searchTerm = tradesTokenFilter.toLowerCase().trim();
       filtered = filtered.filter(t => 
@@ -335,7 +336,6 @@ export default function HyperliquidPro() {
       );
     }
     
-    // Filtro por tipo (long/short)
     if (tradesTypeFilter !== 'all') {
       filtered = filtered.filter(t => {
         const side = (t.side || '').toLowerCase();
@@ -348,7 +348,6 @@ export default function HyperliquidPro() {
       });
     }
     
-    // Filtro por status (win/loss)
     if (tradesStatusFilter !== 'all') {
       filtered = filtered.filter(t => {
         const pnl = parseFloat(t.closed_pnl || t.pnl || 0);
@@ -358,11 +357,10 @@ export default function HyperliquidPro() {
       });
     }
     
-    // Filtro por data
     if (tradesDateStart) {
       const startDate = new Date(tradesDateStart);
       filtered = filtered.filter(t => {
-        const tradeDate = new Date(t.time || t.timestamp);
+        const tradeDate = new Date(t.open_timestamp || t.time || t.timestamp);
         return tradeDate >= startDate;
       });
     }
@@ -371,7 +369,7 @@ export default function HyperliquidPro() {
       const endDate = new Date(tradesDateEnd);
       endDate.setHours(23, 59, 59, 999);
       filtered = filtered.filter(t => {
-        const tradeDate = new Date(t.time || t.timestamp);
+        const tradeDate = new Date(t.open_timestamp || t.time || t.timestamp);
         return tradeDate <= endDate;
       });
     }
@@ -387,8 +385,8 @@ export default function HyperliquidPro() {
       
       switch (tradesSortField) {
         case 'timestamp':
-          aValue = new Date(a.time || a.timestamp).getTime();
-          bValue = new Date(b.time || b.timestamp).getTime();
+          aValue = new Date(a.open_timestamp || a.time || a.timestamp).getTime();
+          bValue = new Date(b.open_timestamp || b.time || b.timestamp).getTime();
           break;
         case 'whale':
           aValue = a.wallet_address || '';
@@ -403,20 +401,16 @@ export default function HyperliquidPro() {
           bValue = (b.side || '').toLowerCase();
           break;
         case 'entry':
-          aValue = parseFloat(a.px || a.entry_price || 0);
-          bValue = parseFloat(b.px || b.entry_price || 0);
-          break;
-        case 'exit':
-          aValue = parseFloat(a.closedPnl || a.closed_pnl || 0);
-          bValue = parseFloat(b.closedPnl || b.closed_pnl || 0);
+          aValue = parseFloat(a.entry_price || a.px || 0);
+          bValue = parseFloat(b.entry_price || b.px || 0);
           break;
         case 'size':
-          aValue = parseFloat(a.sz || a.size || 0);
-          bValue = parseFloat(b.sz || b.size || 0);
+          aValue = parseFloat(a.size || a.sz || 0);
+          bValue = parseFloat(b.size || b.sz || 0);
           break;
         case 'pnl':
-          aValue = parseFloat(a.closedPnl || a.closed_pnl || a.pnl || 0);
-          bValue = parseFloat(b.closedPnl || b.closed_pnl || b.pnl || 0);
+          aValue = parseFloat(a.closed_pnl || a.pnl || 0);
+          bValue = parseFloat(b.closed_pnl || b.pnl || 0);
           break;
         default:
           return 0;
@@ -470,37 +464,31 @@ export default function HyperliquidPro() {
       return;
     }
     
-    // Cabeçalhos
-    const headers = ['Timestamp', 'Whale', 'Token', 'Type', 'Entry Price', 'Exit Price', 'Size', 'PnL', 'Duration', 'Status'];
+    const headers = ['Timestamp', 'Whale', 'Token', 'Type', 'Entry Price', 'Size', 'PnL', 'Status'];
     
-    // Linhas
     const rows = trades.map(trade => {
-      const pnl = parseFloat(trade.closedPnl || trade.closed_pnl || trade.pnl || 0);
+      const pnl = parseFloat(trade.closed_pnl || trade.pnl || 0);
       const status = pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'NEUTRAL';
       const whale = whalesData.find(w => w.address === trade.wallet_address);
       const nickname = whale?.nickname || trade.wallet_address?.slice(0, 8) || 'Unknown';
       
       return [
-        new Date(trade.time || trade.timestamp).toISOString(),
+        new Date(trade.open_timestamp || trade.time || trade.timestamp).toISOString(),
         nickname,
         trade.coin || 'N/A',
         trade.side || 'N/A',
-        trade.px || trade.entry_price || 0,
-        trade.closedPnl || trade.closed_pnl || 0,
-        trade.sz || trade.size || 0,
+        trade.entry_price || trade.px || 0,
+        trade.size || trade.sz || 0,
         pnl.toFixed(2),
-        'N/A', // Duration não disponível
         status
       ];
     });
     
-    // Criar CSV
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.join(','))
     ].join('\n');
     
-    // Download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -532,8 +520,8 @@ export default function HyperliquidPro() {
     let totalSize = 0;
     
     trades.forEach(trade => {
-      const pnl = parseFloat(trade.closedPnl || trade.closed_pnl || trade.pnl || 0);
-      const size = parseFloat(trade.sz || trade.size || 0) * parseFloat(trade.px || trade.entry_price || 0);
+      const pnl = parseFloat(trade.closed_pnl || trade.pnl || 0);
+      const size = parseFloat(trade.size || trade.sz || 0) * parseFloat(trade.entry_price || trade.px || 0);
       
       totalPnL += pnl;
       totalSize += size;
@@ -918,7 +906,6 @@ export default function HyperliquidPro() {
     return () => clearInterval(interval);
   }, []);
 
-  // 🆕 FASE 6.1: Carregar trades quando tab for aberta
   useEffect(() => {
     if (tab === 'trades' && tradesData.length === 0) {
       fetchTrades();
@@ -935,7 +922,6 @@ export default function HyperliquidPro() {
     return sortPositionsDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />;
   };
 
-  // 🆕 FASE 6.1: SortIcon para Trades
   const SortIconTrades = ({ field }) => {
     if (tradesSortField !== field) return <ArrowUpDown className="w-3 h-3 text-slate-500" />;
     return tradesSortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />;
@@ -973,7 +959,6 @@ export default function HyperliquidPro() {
   const shortPercentage = totalTrades > 0 ? ((longShortMetrics.totalShorts / totalTrades) * 100).toFixed(0) : 0;
   const sortedData = getSortedData();
 
-  // 🆕 FASE 6.2: Pegar status dos dados
   const dataStatus = getDataStatus();
 
   return (
@@ -1000,15 +985,56 @@ export default function HyperliquidPro() {
                 <ExternalLink className="w-3 h-3" />HyperDash
               </a>
               
-              <div className={`flex items-center gap-2 bg-${getStatusColor()}-500/10 border border-${getStatusColor()}-500/30 px-3 py-1 rounded text-xs`}>
-                <div className={`w-2 h-2 bg-${getStatusColor()}-400 rounded-full animate-pulse`}></div>
-                <span className={`text-${getStatusColor()}-400 font-medium flex items-center gap-2`}>
-                  {getStatusEmoji()} Live • {whalesData.length}
-                  <span className="flex items-center gap-1 ml-1 pl-2 border-l border-slate-600">
-                    <span className={`text-xs ${getTelegramColor()}`}>{getTelegramIcon()}</span>
-                    <span className="text-[10px] text-slate-400">TG</span>
+              {/* ============================================ */}
+              {/* STATUS INDICATOR COMPACTO COM TOOLTIP */}
+              {/* ============================================ */}
+              <div 
+                className="relative"
+                onMouseEnter={() => setShowStatusTooltip(true)}
+                onMouseLeave={() => setShowStatusTooltip(false)}
+              >
+                <div className={`flex items-center gap-2 bg-${dataStatus.color}-500/10 border border-${dataStatus.color}-500/30 px-3 py-1 rounded text-xs cursor-help`}>
+                  <div className={`w-2 h-2 bg-${dataStatus.color}-400 rounded-full animate-pulse`}></div>
+                  <span className={`text-${dataStatus.color}-400 font-medium flex items-center gap-2`}>
+                    {dataStatus.icon} {dataStatus.text}
+                    <span className="flex items-center gap-1 ml-1 pl-2 border-l border-slate-600">
+                      <span className={`text-xs ${getTelegramColor()}`}>{getTelegramIcon()}</span>
+                      <span className="text-[10px] text-slate-400">{whalesData.length}</span>
+                    </span>
                   </span>
-                </span>
+                </div>
+                
+                {showStatusTooltip && (
+                  <div className="absolute top-full right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-3 z-50">
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <div className="text-slate-400 mb-1">Status do Sistema:</div>
+                        <div className={`text-${dataStatus.color}-400 font-semibold`}>
+                          {dataStatus.icon} {dataStatus.text}
+                        </div>
+                        <div className="text-slate-500 text-[10px] mt-1">
+                          {dataStatus.description}
+                        </div>
+                      </div>
+                      <div className="border-t border-slate-700 pt-2">
+                        <div className="text-slate-400 mb-1">Telegram:</div>
+                        <div className={getTelegramColor()}>
+                          {getTelegramIcon()} {telegramStatus === 'active' ? 'Ativo' : 'Inativo'}
+                        </div>
+                      </div>
+                      <div className="border-t border-slate-700 pt-2">
+                        <div className="text-slate-400 mb-1">Última atualização:</div>
+                        <div className="text-white font-mono text-[10px]">
+                          {lastUpdate ? getTimeAgo(lastUpdate) : 'nunca'}
+                        </div>
+                      </div>
+                      <div className="border-t border-slate-700 pt-2">
+                        <div className="text-slate-400 mb-1">Whales monitoradas:</div>
+                        <div className="text-white font-bold">{whalesData.length}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button onClick={fetchWhales} disabled={isLoading} className="p-1.5 hover:bg-slate-800 rounded disabled:opacity-50">
@@ -1079,17 +1105,6 @@ export default function HyperliquidPro() {
               </div>
             )}
 
-            {/* 🆕 FASE 6.2: Status Indicator no topo */}
-            <div className={`flex items-center justify-between bg-${dataStatus.color}-500/10 border border-${dataStatus.color}-500/30 rounded-lg p-3`}>
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 bg-${dataStatus.color}-400 rounded-full animate-pulse`}></div>
-                <span className={`text-${dataStatus.color}-400 font-bold text-sm`}>{dataStatus.icon} {dataStatus.text}</span>
-              </div>
-              <span className="text-xs text-slate-400">
-                Last update: {lastUpdate ? getTimeAgo(lastUpdate) : 'nunca'}
-              </span>
-            </div>
-
             {/* MÉTRICAS REAIS DO BACKEND - COM TOOLTIPS */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
               <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Soma do valor de todas as posições abertas das whales monitoradas">
@@ -1113,7 +1128,6 @@ export default function HyperliquidPro() {
                 <p className="text-xs text-purple-400">✅ REAL • {getTimeAgo(lastUpdate)}</p>
               </div>
               
-              {/* Win Rate Global REAL */}
               <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Percentual de trades lucrativos do total de trades encerrados">
                 <p className="text-slate-400 text-xs uppercase mb-1">Win Rate</p>
                 {!globalMetrics.hasEnoughData ? (
@@ -1134,7 +1148,6 @@ export default function HyperliquidPro() {
                 )}
               </div>
               
-              {/* Sharpe Ratio REAL */}
               <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Relação retorno/risco. Valores acima de 1.0 são considerados bons">
                 <p className="text-slate-400 text-xs uppercase mb-1">Sharpe</p>
                 {!globalMetrics.hasEnoughData ? (
@@ -1155,7 +1168,6 @@ export default function HyperliquidPro() {
                 )}
               </div>
               
-              {/* Portfolio Heat REAL */}
               <div className="metric-card bg-slate-800/50 border border-slate-700/50 rounded-lg p-3" title="Percentual do portfolio em risco ativo. Valores acima de 70% indicam alta exposição">
                 <p className="text-slate-400 text-xs uppercase mb-1">Heat</p>
                 {!globalMetrics.hasEnoughData ? (
@@ -1200,7 +1212,6 @@ export default function HyperliquidPro() {
                   <p className="text-xs text-orange-400">{shortPercentage}% das posições • ✅ REAL</p>
                 </div>
                 
-                {/* Win Rate Long REAL */}
                 <div className="bg-slate-900/50 rounded p-3" title="Taxa de acerto em trades LONG (posições compradas)">
                   <p className="text-xs text-slate-400 mb-1">LONGs Win Rate</p>
                   {!globalMetrics.hasEnoughData ? (
@@ -1221,7 +1232,6 @@ export default function HyperliquidPro() {
                   )}
                 </div>
                 
-                {/* Win Rate Short REAL */}
                 <div className="bg-slate-900/50 rounded p-3" title="Taxa de acerto em trades SHORT (posições vendidas)">
                   <p className="text-xs text-slate-400 mb-1">SHORTs Win Rate</p>
                   {!globalMetrics.hasEnoughData ? (
@@ -1243,7 +1253,6 @@ export default function HyperliquidPro() {
                 </div>
               </div>
               
-              {/* Indicador de status dos dados */}
               {globalMetrics.total_trades > 0 && (
                 <div className={`mt-3 text-xs p-2 rounded ${globalMetrics.hasEnoughData ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
                   {globalMetrics.hasEnoughData 
@@ -1261,7 +1270,6 @@ export default function HyperliquidPro() {
                 <h3 className="text-lg font-bold">⚡ Liquidações Capturadas</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* 1D - REAL */}
                 <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50" title="Total de liquidações nas últimas 24 horas">
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-2">
@@ -1282,7 +1290,6 @@ export default function HyperliquidPro() {
                   </div>
                 </div>
                 
-                {/* 1W - REAL */}
                 <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50" title="Total de liquidações nos últimos 7 dias">
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-2">
@@ -1303,7 +1310,6 @@ export default function HyperliquidPro() {
                   </div>
                 </div>
                 
-                {/* 1M - REAL */}
                 <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50" title="Total de liquidações nos últimos 30 dias">
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-2">
@@ -1609,11 +1615,10 @@ export default function HyperliquidPro() {
         )}
 
         {/* ============================================ */}
-        {/* 🆕 FASE 6.1 - TRADES TAB COMPLETA */}
+        {/* TRADES TAB - MAPEAMENTO CORRIGIDO */}
         {/* ============================================ */}
         {tab === 'trades' && (
           <div className="space-y-4">
-            {/* Header com refresh e status */}
             <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -1649,7 +1654,6 @@ export default function HyperliquidPro() {
               </div>
             )}
 
-            {/* Cards de Resumo */}
             {!isLoadingTrades && tradesData.length > 0 && (() => {
               const metrics = calculateTradesMetrics();
               return (
@@ -1685,7 +1689,6 @@ export default function HyperliquidPro() {
               );
             })()}
 
-            {/* Filtros Avançados */}
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-4">
                 <Filter className="w-4 h-4 text-blue-400" />
@@ -1693,7 +1696,6 @@ export default function HyperliquidPro() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* Filtro por Whale */}
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Whale</label>
                   <select
@@ -1710,7 +1712,6 @@ export default function HyperliquidPro() {
                   </select>
                 </div>
 
-                {/* Filtro por Token */}
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Token</label>
                   <div className="relative">
@@ -1725,7 +1726,6 @@ export default function HyperliquidPro() {
                   </div>
                 </div>
 
-                {/* Filtro por Tipo */}
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Tipo</label>
                   <select
@@ -1739,7 +1739,6 @@ export default function HyperliquidPro() {
                   </select>
                 </div>
 
-                {/* Filtro por Status */}
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Status</label>
                   <select
@@ -1753,7 +1752,6 @@ export default function HyperliquidPro() {
                   </select>
                 </div>
 
-                {/* Filtro por Data Início */}
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Data Início</label>
                   <div className="relative">
@@ -1767,7 +1765,6 @@ export default function HyperliquidPro() {
                   </div>
                 </div>
 
-                {/* Filtro por Data Fim */}
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Data Fim</label>
                   <div className="relative">
@@ -1781,7 +1778,6 @@ export default function HyperliquidPro() {
                   </div>
                 </div>
 
-                {/* Botões Reset e Export */}
                 <div className="flex items-end gap-2">
                   <button
                     onClick={resetTradesFilters}
@@ -1801,7 +1797,6 @@ export default function HyperliquidPro() {
               </div>
             </div>
 
-            {/* Tabela de Trades */}
             {isLoadingTrades ? (
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
                 <RefreshCw className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-3" />
@@ -1860,15 +1855,15 @@ export default function HyperliquidPro() {
                     </thead>
                     <tbody>
                       {getPaginatedTrades().map((trade, idx) => {
-                        const pnl = parseFloat(trade.closedPnl || trade.closed_pnl || trade.pnl || 0);
+                        const pnl = parseFloat(trade.closed_pnl || trade.pnl || 0);
                         const status = pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'NEUTRAL';
                         const side = (trade.side || '').toLowerCase();
                         const isLong = side.includes('long') || side.includes('buy');
                         const whale = whalesData.find(w => w.address === trade.wallet_address);
                         const nickname = whale?.nickname || trade.wallet_address?.slice(0, 8) || 'Unknown';
-                        const timestamp = new Date(trade.time || trade.timestamp);
-                        const size = parseFloat(trade.sz || trade.size || 0);
-                        const entryPrice = parseFloat(trade.px || trade.entry_price || 0);
+                        const timestamp = new Date(trade.open_timestamp || trade.time || trade.timestamp);
+                        const size = parseFloat(trade.size || trade.sz || 0);
+                        const entryPrice = parseFloat(trade.entry_price || trade.px || 0);
                         
                         return (
                           <tr key={`${trade.wallet_address}-${trade.coin}-${idx}`} className="border-b border-slate-700/30 hover:bg-slate-700/20">
@@ -1923,7 +1918,6 @@ export default function HyperliquidPro() {
                   </table>
                 </div>
 
-                {/* Paginação */}
                 {getTotalPages() > 1 && (
                   <div className="flex items-center justify-between p-4 border-t border-slate-700">
                     <div className="text-sm text-slate-400">
@@ -2324,20 +2318,6 @@ export default function HyperliquidPro() {
             <p className="text-slate-400 text-lg">Whale Leaderboard - Em breve</p>
           </div>
         )}
-      </div>
-
-      {/* ============================================ */}
-      {/* 🆕 FASE 6.2 - DISCLAIMER NO FOOTER */}
-      {/* ============================================ */}
-      <div className="max-w-[1900px] mx-auto px-4 pb-4 mt-8">
-        <div className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4 text-center text-xs text-slate-400">
-          <p className="font-semibold mb-1">⚠️ DISCLAIMER</p>
-          <p>
-            This tool is for informational and educational purposes only. It is NOT financial advice. 
-            Cryptocurrency trading involves substantial risk of loss. Always do your own research (DYOR) before making any investment decisions.
-            The data provided may contain inaccuracies or delays. Past performance does not guarantee future results.
-          </p>
-        </div>
       </div>
 
       {showAddModal && (
