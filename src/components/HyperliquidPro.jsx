@@ -368,7 +368,7 @@ export default function HyperliquidPro() {
       const timestamp = getTradeTimestamp(trade);
       return {
         index: idx + 1,
-        date: timestamp ? new Date(timestamp).toLocaleDateString('pt-BR', { day: '2d', month: '2d' }) : 'N/A',
+        date: timestamp ? new Date(timestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : 'N/A',
         pnl: cumulativePnL,
         tradePnL: pnl
       };
@@ -386,7 +386,7 @@ export default function HyperliquidPro() {
     trades.forEach(trade => {
       const timestamp = getTradeTimestamp(trade);
       if (timestamp) {
-        const date = new Date(timestamp).toLocaleDateString('pt-BR', { day: '2d', month: '2d' });
+        const date = new Date(timestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         volumeByDay[date] = (volumeByDay[date] || 0) + 1;
       }
     });
