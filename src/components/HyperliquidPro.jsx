@@ -94,6 +94,16 @@ export default function HyperliquidPro() {
   // Tooltip status
   const [showStatusTooltip, setShowStatusTooltip] = useState(false);
 
+  // FASE 7 - AI WALLET STATES
+  const [aiWalletData, setAiWalletData] = useState({
+    whaleScores: [],
+    marketSentiment: null,
+    correlation: [],
+    signals: []
+  });
+  const [isLoadingAiWallet, setIsLoadingAiWallet] = useState(false);
+  const [aiWalletLastUpdate, setAiWalletLastUpdate] = useState(null);
+
   // ⚠️ DADOS MOCKADOS - Liquidações detalhadas
   const liquidationData = {
     '1D': { total: 2340000, trades: 12, profit: 450000, longs: 8, shorts: 4 },
@@ -350,6 +360,31 @@ export default function HyperliquidPro() {
       setTradesData([]);
     } finally {
       setIsLoadingTrades(false);
+    }
+  };
+
+  // ============================================
+  // FETCH AI WALLET DATA - FASE 7
+  // ============================================
+  const fetchAiWalletData = async () => {
+    setIsLoadingAiWallet(true);
+    try {
+      const [scores, sentiment, signals] = await Promise.all([
+        fetch(`${API_URL}/api/ai/whale-scores`).then(r => r.json()),
+        fetch(`${API_URL}/api/ai/market-sentiment`).then(r => r.json()),
+        fetch(`${API_URL}/api/ai/predictive-signals`).then(r => r.json())
+      ]);
+
+      setAiWalletData({
+        whaleScores: scores.whale_scores || [],
+        marketSentiment: sentiment,
+        signals: signals.signals || []
+      });
+      setAiWalletLastUpdate(new Date());
+    } catch (err) {
+      console.error('Erro ao carregar AI Wallet:', err);
+    } finally {
+      setIsLoadingAiWallet(false);
     }
   };
 
@@ -1008,6 +1043,12 @@ export default function HyperliquidPro() {
   useEffect(() => {
     if (tab === 'trades' && tradesData.length === 0) {
       fetchTrades();
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === 'ai-wallet' && aiWalletData.whaleScores.length === 0) {
+      fetchAiWalletData();
     }
   }, [tab]);
 
@@ -2618,9 +2659,250 @@ export default function HyperliquidPro() {
         )}
 
         {tab === 'ai-wallet' && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
-            <Brain className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-            <p className="text-slate-400 text-lg">AI Wallet Analysis - Em breve</p>
+          <div className="space-y-4">
+            {/* HEADER */}
+            <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-lg p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Users className="w-6 h-6 text-purple-400" />
+                    🧠 AI Wallet Intelligence - Análise Institucional
+                  </h2>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {aiWalletData.whaleScores.length} whales analisadas • Last update: {aiWalletLastUpdate ? getTimeAgo(aiWalletLastUpdate) : 'nunca'}
+                  </p>
+                </div>
+                <button
+                  onClick={fetchAiWalletData}
+                  disabled={isLoadingAiWallet}
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded font-medium disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingAiWallet ? 'animate-spin' : ''}`} />
+                  {isLoadingAiWallet ? 'Carregando...' : 'Atualizar'}
+                </button>
+              </div>
+            </div>
+
+            {isLoadingAiWallet ? (
+              <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-8 text-center">
+                <RefreshCw className="w-8 h-8 animate-spin text-purple-400 mx-auto mb-3" />
+                <p className="text-slate-400">Calculando Intelligence Scores...</p>
+              </div>
+            ) : (
+              <>
+                {/* SEÇÃO 1: WHALE INTELLIGENCE SCORES */}
+                <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Award className="w-6 h-6 text-blue-400" />
+                    <h3 className="text-xl font-bold">🏆 Whale Intelligence Ranking</h3>
+                  </div>
+
+                  {aiWalletData.whaleScores.length === 0 ? (
+                    <p className="text-slate-400 text-center py-4">Nenhum dado disponível</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {aiWalletData.whaleScores.slice(0, 10).map((whale, idx) => (
+                        <div key={whale.address} className={`bg-slate-800/50 border rounded-lg p-4 ${
+                          idx < 3 ? 'border-yellow-500/50 bg-gradient-to-r from-yellow-500/5 to-transparent' : 'border-slate-700/50'
+                        }`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              {idx === 0 && <span className="text-2xl">🥇</span>}
+                              {idx === 1 && <span className="text-2xl">🥈</span>}
+                              {idx === 2 && <span className="text-2xl">🥉</span>}
+                              {idx >= 3 && <span className="text-slate-500 font-bold">#{idx + 1}</span>}
+                              <div>
+                                <div className="font-bold text-lg">{whale.nickname}</div>
+                                <div className="text-xs text-slate-400 font-mono">{whale.address.slice(0, 8)}...{whale.address.slice(-6)}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="flex items-center gap-2 mb-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star key={i} className={`w-4 h-4 ${i < whale.stars ? 'text-yellow-400 fill-yellow-400' : 'text-slate-600'}`} />
+                                ))}
+                              </div>
+                              <div className="text-2xl font-bold text-blue-400">{whale.intelligence_score}</div>
+                              <div className="text-xs text-slate-400">{whale.tier}</div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-5 gap-3 text-xs">
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <div className="text-slate-400 mb-1">Win Rate</div>
+                              <div className="font-bold text-green-400">{whale.breakdown.win_rate.toFixed(1)}%</div>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <div className="text-slate-400 mb-1">Sharpe</div>
+                              <div className="font-bold text-yellow-400">{whale.breakdown.sharpe_ratio.toFixed(2)}</div>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <div className="text-slate-400 mb-1">Consistency</div>
+                              <div className="font-bold text-purple-400">{whale.breakdown.consistency.toFixed(0)}%</div>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <div className="text-slate-400 mb-1">Avg Trade</div>
+                              <div className="font-bold text-blue-400">{formatCurrency(whale.breakdown.avg_trade_size)}</div>
+                            </div>
+                            <div className="bg-slate-900/50 rounded p-2">
+                              <div className="text-slate-400 mb-1">PnL 7d</div>
+                              <div className={`font-bold ${whale.breakdown.recent_pnl_7d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {formatCurrency(whale.breakdown.recent_pnl_7d)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* SEÇÃO 2: MARKET SENTIMENT */}
+                {aiWalletData.marketSentiment && (
+                  <div className="bg-gradient-to-r from-green-500/10 to-orange-500/10 border border-slate-700/50 rounded-lg p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <TrendingUp className="w-6 h-6 text-green-400" />
+                      <h3 className="text-xl font-bold">📊 Market Sentiment Agregado</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
+                        <div className="text-center">
+                          <div className="text-4xl mb-2">{aiWalletData.marketSentiment.sentiment_icon}</div>
+                          <div className="text-2xl font-bold mb-1">{aiWalletData.marketSentiment.sentiment}</div>
+                          <div className="text-sm text-slate-400">Sentiment Geral</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span className="text-green-400">🟢 BULLISH</span>
+                            <span className="font-bold text-green-400">{aiWalletData.marketSentiment.bullish_percentage}%</span>
+                          </div>
+                          <div className="w-full bg-slate-900 rounded-full h-2">
+                            <div className="bg-green-500 h-2 rounded-full" style={{width: `${aiWalletData.marketSentiment.bullish_percentage}%`}}></div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span className="text-orange-400">🔴 BEARISH</span>
+                            <span className="font-bold text-orange-400">{aiWalletData.marketSentiment.bearish_percentage}%</span>
+                          </div>
+                          <div className="w-full bg-slate-900 rounded-full h-2">
+                            <div className="bg-orange-500 h-2 rounded-full" style={{width: `${aiWalletData.marketSentiment.bearish_percentage}%`}}></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Total Longs:</span>
+                            <span className="font-bold text-green-400">{aiWalletData.marketSentiment.positions.total_longs}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Total Shorts:</span>
+                            <span className="font-bold text-orange-400">{aiWalletData.marketSentiment.positions.total_shorts}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Vol. Long:</span>
+                            <span className="font-bold text-green-400">{formatCurrency(aiWalletData.marketSentiment.positions.volume_long)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Vol. Short:</span>
+                            <span className="font-bold text-orange-400">{formatCurrency(aiWalletData.marketSentiment.positions.volume_short)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50">
+                      <h4 className="font-bold mb-3 flex items-center gap-2">
+                        <Flame className="w-4 h-4 text-orange-400" />
+                        🔥 Hot Tokens (Top Concentração)
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        {aiWalletData.marketSentiment.hot_tokens.slice(0, 5).map(token => (
+                          <div key={token.token} className="bg-slate-800/50 rounded p-3 text-center">
+                            <div className="font-bold text-blue-400 mb-1">{token.token}</div>
+                            <div className="text-xs text-slate-400 mb-1">{token.whale_count} whales</div>
+                            <div className={`text-xs font-bold ${
+                              token.consensus === 'LONG' ? 'text-green-400' :
+                              token.consensus === 'SHORT' ? 'text-orange-400' : 'text-yellow-400'
+                            }`}>
+                              {token.consensus === 'LONG' ? '🟢' : token.consensus === 'SHORT' ? '🔴' : '⚖️'} {token.consensus}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {aiWalletData.marketSentiment.divergences.length > 0 && (
+                      <div className="mt-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                        <h4 className="font-bold mb-3 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                          ⚠️ Divergências Importantes
+                        </h4>
+                        <div className="space-y-2">
+                          {aiWalletData.marketSentiment.divergences.map((div, idx) => (
+                            <div key={idx} className="bg-slate-900/50 rounded p-3 text-sm">
+                              <span className="font-bold text-yellow-400">{div.whale}</span> está{' '}
+                              <span className={div.whale_position === 'LONG' ? 'text-green-400' : 'text-orange-400'}>
+                                {div.whale_position}
+                              </span> em {' '}
+                              <span className="text-blue-400 font-bold">{div.token}</span> enquanto a maioria está{' '}
+                              <span className={div.majority_position === 'LONG' ? 'text-green-400' : 'text-orange-400'}>
+                                {div.majority_position}
+                              </span>
+                              {div.alert_level === 'HIGH' && <span className="ml-2 text-red-400 font-bold">🚨 ALTO SINAL</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* SEÇÃO 3: PREDICTIVE SIGNALS */}
+                {aiWalletData.signals.length > 0 && (
+                  <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Target className="w-6 h-6 text-purple-400" />
+                      <h3 className="text-xl font-bold">🎯 Predictive Trading Signals</h3>
+                    </div>
+
+                    <div className="space-y-3">
+                      {aiWalletData.signals.map((signal, idx) => (
+                        <div key={idx} className={`bg-slate-800/50 border rounded-lg p-4 ${
+                          signal.color === 'green' ? 'border-green-500/50 bg-green-500/5' :
+                          signal.color === 'yellow' ? 'border-yellow-500/50 bg-yellow-500/5' :
+                          signal.color === 'blue' ? 'border-blue-500/50 bg-blue-500/5' : 'border-slate-700/50'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                              <div className="text-2xl">{signal.icon}</div>
+                              <div>
+                                <div className="font-bold text-lg">{signal.signal_type}</div>
+                                <div className="text-sm text-slate-400">{signal.token}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-purple-400">{signal.confidence}%</div>
+                              <div className="text-xs text-slate-400">Confidence</div>
+                            </div>
+                          </div>
+                          <div className="text-sm text-slate-300 mb-2">{signal.reason}</div>
+                          <div className="flex items-center justify-between text-xs text-slate-400">
+                            <span>Volume: {formatCurrency(signal.volume)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
